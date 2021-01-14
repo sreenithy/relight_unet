@@ -25,8 +25,8 @@ def main(hparams):
                          prepare_data_per_node=False,
                          profiler=False,
                          distributed_backend=hparams.distributed_backend,
-                         logger=logger,gradient_clip_val=0.5, replace_sampler_ddp=False, resume_from_checkpoint='tb_logs/relightnet/version_109/checkpoints/epoch=205.ckpt'
-    )
+                         logger=logger,gradient_clip_val=0.5, replace_sampler_ddp=False,resume_from_checkpoint='tb_logs/relightnet/version_11/checkpoints/epoch=18.ckpt')
+
 
 
     # ------------------------

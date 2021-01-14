@@ -137,20 +137,12 @@ class HourglassNet(pl.LightningModule):
         self.psnrtable = pd.DataFrame()
         self.blur = GaussianBlur(5)
 
-        inputs = np.concatenate((np.ones((1, 1, 16, 32)), generate_input_channels(harmonics=3)[np.newaxis, ...]),
-                                axis=1)
-        self.register_buffer("light_inputs", torch.from_numpy(inputs).float())
         self.ncLight = 4  #  number of channels for input to lighting network
         self.baseFilter = 16
-        self.ncOutLight = 3
+
 
         self.ncPre = self.baseFilter  # number of channels for pre-convolution
 
-        # number of channels
-        # self.ncHG4 = self.baseFilter
-        # self.ncHG3 = 2 * self.baseFilter
-        # self.ncHG2 = 4 * self.baseFilter
-        # self.ncHG1 = 8 * self.baseFilter
         self.ncHG4 = self.baseFilter
         self.ncHG3 = 2 * self.baseFilter
         self.ncHG2 = 4 * self.baseFilter
@@ -162,7 +154,7 @@ class HourglassNet(pl.LightningModule):
 
         self.gru = ConvGRU(input_size=self.ncPre, hidden_sizes=[64, self.ncPre],
                            kernel_sizes=[3, 3], n_layers=2)
-        self.light = lightingNet(4,3,4)
+        self.light = lightingNet(128)
         # self.HG0 = HourglassBlock(self.ncHG1, self.ncHG0, self.light)
         self.HG1 = HourglassBlock(self.ncHG2, self.ncHG1, self.light)
         self.HG2 = HourglassBlock(self.ncHG3, self.ncHG2, self.HG1)
@@ -170,11 +162,11 @@ class HourglassNet(pl.LightningModule):
         self.HG4 = HourglassBlock(self.ncPre, self.ncHG4, self.HG3)
 
         self.conv_1 = nn.Conv2d(self.ncPre, self.ncPre, kernel_size=3, stride=1, padding=1)
-        self.bn_1 = nn.BatchNorm2d(self.ncPre)
+        self.bn_1 = nn.InstanceNorm2d(self.ncPre)
         self.conv_2 = nn.Conv2d(self.ncPre, self.ncPre, kernel_size=1, stride=1, padding=0)
-        self.bn_2 = nn.BatchNorm2d(self.ncPre)
+        self.bn_2 = nn.InstanceNorm2d(self.ncPre)#self.bn_2 = nn.BatchNorm2d(self.ncPre)
         self.conv_3 = nn.Conv2d(self.ncPre, self.ncPre, kernel_size=1, stride=1, padding=0)
-        self.bn_3 = nn.BatchNorm2d(self.ncPre)
+        self.bn_3 = nn.InstanceNorm2d(self.ncPre)#self.bn_3 = nn.BatchNorm2d(self.ncPre)
 
         self.output = nn.Conv2d(self.ncPre, 3, kernel_size=1, stride=1, padding=0)
         self.save_hyperparameters()
@@ -182,14 +174,9 @@ class HourglassNet(pl.LightningModule):
 
     def forward(self, x, input_state = None):
         skip_count=0
-        # print("1. Hourglass Net inside forward", x.shape)
         feat = self.pre_conv(x)
-        # print("2. Hourglass Net after pre_conv", feat.shape)
         feat = F.relu(self.pre_bn(feat))
-        # print("3. Hourglass Net after relu", feat.shape, target_light.shape)
-        # get the inner most features
-        feat, light_estim = self.HG4(feat, self.light_inputs.repeat(x.shape[0], 1, 1, 1),0,skip_count)
-
+        feat, light_estim = self.HG4(feat,0,skip_count)
         gru_features = self.gru(feat, input_state)
         # print("4. Albedo Net full out", feat.shape, full_face.shape)
         feat = F.relu(self.bn_1(self.conv_1(gru_features[-1])))
@@ -205,24 +192,18 @@ class HourglassNet(pl.LightningModule):
     def training_step(self, batch, batch_nb):
 
         inputs, _, light_inputs, _, albedo_gts, masks = batch
-        # output, output_light, full_face,hiddens = self.forward(inputs, 0,hiddens)
-
         gru_state = None
         loss = 0
 
         for idx, (input_, light_input, mask,albedo_gt) in enumerate(zip(inputs,light_inputs,masks,albedo_gts)):
 
             face_estim, light_estim, gru_state = self.forward(input_, gru_state)
-            light_input_diffuse = 3 * self.blur(light_input)
-            light_estim_diffuse = 3 * self.blur(light_estim)
-
             # Calculate loss
             sz = albedo_gt.size(2) ** 2
             # change
-            l1_face = 7 / sz * torch.sum(torch.abs(face_estim - albedo_gt) * mask) / face_estim.shape[0]
-            l1_light = 0.5 / (16 * 32) * torch.sum(torch.abs(light_estim - light_input)) / face_estim.shape[0] + \
-                       1 / (16 * 32) * torch.sum(torch.abs(light_estim_diffuse - light_input_diffuse)) / \
-                       face_estim.shape[0]
+            l1_face = 5 / sz * torch.sum(torch.abs(face_estim - albedo_gt) * mask) / face_estim.shape[0]
+            l1_light = 1 / (16 * 32) * torch.sum(torch.abs(light_estim - light_input)) / face_estim.shape[0]
+
             loss += l1_face + l1_light  # + tv_loss_albedo
 
             # save learning_rate
@@ -257,6 +238,17 @@ class HourglassNet(pl.LightningModule):
                                                                                            self.global_step, idx))
 
                     plt.close()
+            if self.hparams.log_graph == 1:
+                # Logging the computational graph on tensorboard
+                if self.global_step == 1:
+                    example_input_array = list()
+                    example_input_array.append(torch.rand((1, 3, 256, 256)))
+                    self.logger.experiment.add_graph(HourglassNet(self.hparams), example_input_array)
+                    print("Logged computational Graph")
+
+            if self.hparams.log_histogram == 1:
+                self.custom_histogram_adder()
+
 
         loss = loss / idx
         self.log('l1_face', l1_face, prog_bar=True)
@@ -278,21 +270,14 @@ class HourglassNet(pl.LightningModule):
             face_estim, light_estim, gru_state = self.forward(input_, gru_state)
 
             face_estim = torch.clamp(face_estim, min=0, max=1)
-            light_estim = torch.clamp(light_estim, min=0, max=1)
-
-            light_input_diffuse = 3 * self.blur(light_input)
-            light_estim_diffuse = 3 * self.blur(light_estim)
+            # light_estim = torch.clamp(light_estim, min=0, max=1)
 
             # Calculate loss
             sz = albedo_gt.size(2) ** 2
+            l1_face = 5 / sz * torch.sum(torch.abs(face_estim - albedo_gt) * mask) / face_estim.shape[0]
+            l1_light = 1 / (16 * 32) * torch.sum(torch.abs(light_estim - light_input)) / face_estim.shape[0]
 
-            l1_face = 7 / sz * torch.sum(torch.abs(face_estim - albedo_gt)*mask) / face_estim.shape[0]
-            l1_light = 0.5 / (16 * 32) * torch.sum(torch.abs(light_estim - light_input)) / face_estim.shape[0] + \
-                       1 / (16 * 32) * torch.sum(torch.abs(light_estim_diffuse - light_input_diffuse)) / \
-                       face_estim.shape[0]
-            # tv_loss_albedo = tv_loss(face_estim)
-
-            loss += l1_face + l1_light #+ tv_loss_albedo
+            loss += l1_face + l1_light
 
             psnr_.append(psnr(image_pred=face_estim, image_gt=albedo_gt))
 
@@ -355,11 +340,11 @@ class HourglassNet(pl.LightningModule):
 
         parser.add_argument('--log_images', default=1, type=int,
                             help='Log intermediate training results')
-        parser.add_argument('--log_graph', default=0, type=int,
+        parser.add_argument('--log_graph', default=1, type=int,
                             help='Log compuational graph on tensorboard')
         parser.add_argument('--log_histogram', default=0, type=int,
                             help='Log histogram for weights and bias')
-        parser.add_argument('--batch_size', default=8, type=int)
+        parser.add_argument('--batch_size', default=4, type=int)
         parser.add_argument('--learning_rate', default=2e-3, type=float)
         parser.add_argument('--momentum', default=0.9, type=float,
                             help='SGD momentum (default: 0.9)')

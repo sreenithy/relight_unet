@@ -35,14 +35,14 @@ class HourglassBlock(pl.LightningModule):
         self.middle = middleNet
         self.low2 = BasicBlock(mid_plane, inplane, batchNorm_type=1)
 
-    def forward(self, x, light, count, skip_count):
+    def forward(self, x, count, skip_count):
         # we use count to indicate wich layer we are in
         # max_count indicates the from which layer, we would use skip connections
         # print("\HourglassBlock inside forward", x.shape, light.shape)
         out_upper = self.upper(x)
         out_lower = self.downSample(x)
         out_lower = self.low1(out_lower)
-        out_lower, out_middle = self.middle(out_lower, light, count + 1, skip_count)
+        out_lower, out_middle = self.middle(out_lower, count + 1, skip_count)
         out_lower = self.low2(out_lower)
         out_lower = self.upSample(out_lower)
 
