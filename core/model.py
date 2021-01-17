@@ -35,7 +35,6 @@ from update import HourglassBlock
 from convgru import ConvGRU
 from lighting import lightingNet
 
-
 # From https://github.com/pytorch/pytorch/issues/15849
 class _RepeatSampler(object):
     def __init__(self, sampler):
@@ -171,6 +170,11 @@ class HourglassNet(pl.LightningModule):
         self.output = nn.Conv2d(self.ncPre, 3, kernel_size=1, stride=1, padding=0)
         self.save_hyperparameters()
 
+        # # self.light_model = self.__build_light_model()
+        # inputs = np.concatenate((np.ones((1, 1, 16, 32)), generate_input_channels(harmonics=3)[np.newaxis, ...]),
+        #                         axis=1)
+        # self.register_buffer("light_inputs", torch.from_numpy(inputs).float())
+
 
     def forward(self, x, input_state = None):
         skip_count=0
@@ -190,7 +194,8 @@ class HourglassNet(pl.LightningModule):
 
 
     def training_step(self, batch, batch_nb):
-
+        print("Current epoch",self.current_epoch)
+        self.trainer.optimizers[0].param_groups[-1]['lr'] = 2e-5
         inputs, _, light_inputs, _, albedo_gts, masks = batch
         gru_state = None
         loss = 0
@@ -315,7 +320,9 @@ class HourglassNet(pl.LightningModule):
     def configure_optimizers(self):
         optimizer = torch.optim.Adam(self.parameters(), lr=self.lr,
                                      betas=(0.5, 0.999))
-        scheduler =  MultiStepLR(optimizer, milestones=[30000, 60000], gamma=0.5)
+
+        scheduler = MultiStepLR(optimizer, milestones=[1790, 4000], gamma=0.5)
+        # scheduler =  MultiStepLR(optimizer, milestones=[30000, 60000], gamma=0.5)
         return [optimizer], [scheduler]
 
     def __dataloader(self):
@@ -344,7 +351,7 @@ class HourglassNet(pl.LightningModule):
                             help='Log compuational graph on tensorboard')
         parser.add_argument('--log_histogram', default=0, type=int,
                             help='Log histogram for weights and bias')
-        parser.add_argument('--batch_size', default=4, type=int)
+        parser.add_argument('--batch_size', default=8, type=int)
         parser.add_argument('--learning_rate', default=2e-3, type=float)
         parser.add_argument('--momentum', default=0.9, type=float,
                             help='SGD momentum (default: 0.9)')

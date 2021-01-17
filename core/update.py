@@ -52,6 +52,5 @@ class HourglassBlock(pl.LightningModule):
             out = out_lower + out_upper
         else:
             out = out_lower
-            # out = out_upper
         return out, out_middle
 
