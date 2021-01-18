@@ -27,10 +27,7 @@ def main(hparams):
                          prepare_data_per_node=False,
                          profiler=False,
                          distributed_backend=hparams.distributed_backend,
-                         logger=logger,gradient_clip_val=0.5, replace_sampler_ddp=False,resume_from_checkpoint='tb_logs/relightnet/version_34/checkpoints/epoch=2399.ckpt')
-    # trainer = pl.Trainer(max_epochs=10, progress_bar_refresh_rate=20)
-    # trainer.global_step = checkpoint["global_step"]
-    # trainer.current_epoch = checkpoint["epoch"]
+                         logger=logger,replace_sampler_ddp=False)
 
     # ------------------------
     # 3 FIND LR

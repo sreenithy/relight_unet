@@ -99,8 +99,9 @@ class LightStageFrames(Dataset):
     def __init__(self, path, transform=None):
         # Get a list of { (identity+light) : filename }
         self.dataList = defaultdict(list)
-        for f in sorted(glob.glob(str(path / "*.png")), key=numericalSort):
-            self.dataList["_".join(f.split("_")[:1])].append(f)
+        # for f in sorted(glob.glob(str(path / "*.png")), key=numericalSort):
+        for f in glob.glob(str(path / "*.png")):
+            self.dataList["_".join(f.split("_")[:3])].append(f)
 
         self.dataKeys = list(self.dataList.keys())
         self.transform = transform
@@ -137,10 +138,11 @@ class LightStageFrames(Dataset):
 
         ip = modify(ip, im_mul)
         ip_light = modifylight(ip_light)
-        mask_path = 'albedo_mask/' + img_id + '.png'
-        full = 'Full/{}.png'.format(img_id)
-
-        # print(cnt, img_path, full, light_path, mask_path, v, l)
+        # mask_path = 'albedo_mask/' + img_id + '.png'
+        mask_path = 'albedo_mask/' + img_id + '_' + str(v).zfill(2) +'.png'
+        # full = 'Full/{}.png'.format(img_id)
+        full = 'Fullview/' + img_id + '_' + str(v).zfill(2) + '.png'
+        print( img_path, full, light_path, mask_path, v, l)
         mask = Image.open(mask_path)
         mask = mask.resize((RES, RES))
         mask = modify_mask(mask)
@@ -152,7 +154,6 @@ class LightStageFrames(Dataset):
         return ip, [], ip_light, [], mask, fullimgip
 
     def _processlaval(self, img_path, RES):
-
         img_id = str(os.path.splitext(os.path.basename(img_path))[0].split("_")[0])
         l = str(os.path.splitext(os.path.basename(img_path))[0].split("_")[-1])
         v = int(os.path.splitext(os.path.basename(img_path))[0].split("_")[1])
@@ -176,10 +177,11 @@ class LightStageFrames(Dataset):
         ip = modify(ip, im_mul)
         ip_light = modifylight(ip_light)
 
-        mask_path = 'albedo_mask/' + img_id + '.png'
-        full = 'Full/{}.png'.format(img_id)
+        # mask_path = 'albedo_mask/' + img_id + '.png'
+        mask_path = 'albedo_mask/' + img_id + '_' + str(v).zfill(2) + '.png'
+        full = 'Fullview/' + img_id +'_'+str(v).zfill(2)+'.png'
 
-        # print(cnt, img_path, full, light_path, mask_path, v, l)
+        print( img_path, full, mask_path, v, l)
         mask = Image.open(mask_path)
         mask = mask.resize((RES, RES))
         mask = modify_mask(mask)
@@ -194,37 +196,19 @@ class LightStageFrames(Dataset):
     def __getitem__(self, index):
 
         RES = 256
-        img_paths = self.dataKeys[index]
-        #print("index",index,len(self.dataList[img_paths]),img_paths)
-        images = []
-        lights = []
-        masks = []
-        full = []
-        parse = []
-        no_view = 4#random.randint(4,6)
-        target_index = random.sample(range(0, len(self.dataList[img_paths])), no_view)
-        cnt = 0
-        #print(no_view,target_index,self.dataList[self.dataKeys[index]] )
-        I=[]
-        for i in range(no_view):
-            img_path = self.dataList[self.dataKeys[index]][target_index[i]]
-            # print("i",i,img_path)
-            l = str(os.path.splitext(os.path.basename(img_path))[0].split("_")[-1])
-            if l in ['10', '11', '13', '20', '21', '23', '24', '25', '26', '34', '35', '36', '37', '38', '39', '41',
-                     '48', '49', '50', '53', '55', '56', '57', '61', '62', '63', '64', '65', '66', '67', '68', '69', '70',
-                     '71', '72', '76', '77', '78', '79', '80', '81', '82', '83', '84', '85', '86', '89', '90', '91', '94',
-                     '95', '96', '97', '98', '101', '102', '103', '104', '105', '106', '107', '108', '109', '110', '114',
-                     '115', '116', '117', '118', '119', '120', '121', '122', '123', '125', '126', '127', '128', '129',
-                     '130', '131', '133', '134', '135', '136', '137', '138', '141', '142', '143', '144', '146','147', '149']:
-                img, _, light, _, mask, fullimg = self._processolat(img_path, RES)
-            else:
-                img, _, light, _, mask, fullimg = self._processlaval(img_path, RES)
-            images.append(img)
-            lights.append(light)
-            masks.append(mask)
-            full.append(fullimg)
-            cnt += 1
-        return images, [], lights, [], full,masks
+        img_path = self.dataList[self.dataKeys[index]]
+        l = str(os.path.splitext(os.path.basename(img_path))[0].split("_")[-1])
+        if l in ['10', '11', '13', '20', '21', '23', '24', '25', '26', '34', '35', '36', '37', '38', '39', '41',
+                 '48', '49', '50', '53', '55', '56', '57', '61', '62', '63', '64', '65', '66', '67', '68', '69', '70',
+                 '71', '72', '76', '77', '78', '79', '80', '81', '82', '83', '84', '85', '86', '89', '90', '91', '94',
+                 '95', '96', '97', '98', '101', '102', '103', '104', '105', '106', '107', '108', '109', '110', '114',
+                 '115', '116', '117', '118', '119', '120', '121', '122', '123', '125', '126', '127', '128', '129',
+                 '130', '131', '133', '134', '135', '136', '137', '138', '141', '142', '143', '144', '146','147', '149']:
+            img, _, light, _, mask, fullimg = self._processolat(img_path, RES)
+        else:
+            img, _, light, _, mask, fullimg = self._processlaval(img_path, RES)
+
+        return img, [], light, [], fullimg,mask
 
     def lightprocess(self, e, name):
         #print("e",name)

@@ -59,66 +59,6 @@ class FastDataLoader(DataLoader):
 
 
 
-class gradientLayer(nn.Module):
-    '''
-    	get the gradient of x, y direction
-    '''
-
-    def __init__(self):
-        super(gradientLayer, self).__init__()
-        self.weight_x = torch.unsqueeze(torch.unsqueeze(torch.Tensor(
-            [[0, -0.5, 0], [0, 0, 0], [0, 0.5, 0]]), 0), 0)
-        self.weight_y = torch.unsqueeze(torch.unsqueeze(torch.Tensor(
-            [[0, 0, 0], [-0.5, 0, 0.5], [0, 0, 0]]), 0), 0)
-        self.conv_x = nn.Conv2d(1, 1, kernel_size=3, padding=1, bias=False)
-        self.conv_x.weight.data = self.weight_x
-        self.conv_y = nn.Conv2d(1, 1, kernel_size=3, padding=1, bias=False)
-        self.conv_y.weight.data = self.weight_y
-
-    def forward(self, x):
-        out_x = self.conv_x(x)
-        out_y = self.conv_y(x)
-        out = torch.cat((out_x, out_y), 1)
-        return out
-
-
-class gradientLayer_color(nn.Module):
-    '''
-    	get the gradient of x, y direction
-	for color images
-    '''
-
-    def __init__(self):
-        super(gradientLayer_color, self).__init__()
-        self.weight_x = torch.unsqueeze(torch.unsqueeze(torch.Tensor(
-            [[0, -0.5, 0], [0, 0, 0], [0, 0.5, 0]]), 0), 0)
-        self.weight_y = torch.unsqueeze(torch.unsqueeze(torch.Tensor(
-            [[0, 0, 0], [-0.5, 0, 0.5], [0, 0, 0]]), 0), 0)
-        self.conv_x = nn.Conv2d(1, 1, kernel_size=3, padding=1, bias=False)
-        self.conv_x.weight.data = self.weight_x
-        self.conv_y = nn.Conv2d(1, 1, kernel_size=3, padding=1, bias=False)
-        self.conv_y.weight.data = self.weight_y
-
-    def forward(self, x):
-        # number of channel
-        # channel 1
-        tmpX_0 = x[:, 0, :, :].unsqueeze(dim=1)
-        outx_0 = self.conv_x(tmpX_0)
-        outy_0 = self.conv_y(tmpX_0)
-
-        tmpX_1 = x[:, 1, :, :].unsqueeze(dim=1)
-        outx_1 = self.conv_x(tmpX_1)
-        outy_1 = self.conv_y(tmpX_1)
-
-        tmpX_2 = x[:, 2, :, :].unsqueeze(dim=1)
-        outx_2 = self.conv_x(tmpX_2)
-        outy_2 = self.conv_y(tmpX_2)
-
-        out = torch.cat((outx_0, outx_1, outx_2, outy_0, outy_1, outy_2), 1)
-        return out
-
-
-
 class HourglassNet(pl.LightningModule):
 
     def __init__(self, hparams):
@@ -137,9 +77,7 @@ class HourglassNet(pl.LightningModule):
         self.blur = GaussianBlur(5)
 
         self.ncLight = 4  #  number of channels for input to lighting network
-        self.baseFilter = 16
-
-
+        self.baseFilter =16
         self.ncPre = self.baseFilter  # number of channels for pre-convolution
 
         self.ncHG4 = self.baseFilter
@@ -150,9 +88,10 @@ class HourglassNet(pl.LightningModule):
 
         self.pre_conv = nn.Conv2d(3, self.ncPre, kernel_size=5, stride=1, padding=2)
         self.pre_bn = nn.BatchNorm2d(self.ncPre)
+        #
+        # self.gru = ConvGRU(input_size=self.ncPre, hidden_sizes=[64, self.ncPre],
+        #                    kernel_sizes=[3, 3], n_layers=2)
 
-        self.gru = ConvGRU(input_size=self.ncPre, hidden_sizes=[64, self.ncPre],
-                           kernel_sizes=[3, 3], n_layers=2)
         self.light = lightingNet(128)
         # self.HG0 = HourglassBlock(self.ncHG1, self.ncHG0, self.light)
         self.HG1 = HourglassBlock(self.ncHG2, self.ncHG1, self.light)
@@ -176,86 +115,79 @@ class HourglassNet(pl.LightningModule):
         # self.register_buffer("light_inputs", torch.from_numpy(inputs).float())
 
 
-    def forward(self, x, input_state = None):
+    def forward(self, x):
         skip_count=0
         feat = self.pre_conv(x)
         feat = F.relu(self.pre_bn(feat))
         feat, light_estim = self.HG4(feat,0,skip_count)
-        gru_features = self.gru(feat, input_state)
+        # gru_features = self.gru(feat, input_state)
         # print("4. Albedo Net full out", feat.shape, full_face.shape)
-        feat = F.relu(self.bn_1(self.conv_1(gru_features[-1])))
+        # feat = F.relu(self.bn_1(self.conv_1(gru_features[-1])))
+        feat = F.relu(self.bn_1(self.conv_1(feat)))
         feat = F.relu(self.bn_2(self.conv_2(feat)))
         feat = F.relu(self.bn_3(self.conv_3(feat)))
         out_img = self.output(feat)
         albedo_estim = torch.sigmoid(out_img)
 
-        return albedo_estim, light_estim, gru_features
+        return albedo_estim, light_estim
 
 
 
     def training_step(self, batch, batch_nb):
-        print("Current epoch",self.current_epoch)
-        self.trainer.optimizers[0].param_groups[-1]['lr'] = 2e-5
-        inputs, _, light_inputs, _, albedo_gts, masks = batch
-        gru_state = None
-        loss = 0
+        # print("Current epoch",self.current_epoch)
+        # self.trainer.optimizers[0].param_groups[-1]['lr'] = 2e-5
+        input_, _, light_input, _, albedo_gt, mask = batch
+        face_estim, light_estim = self.forward(input_)
+        # Calculate loss
+        sz = albedo_gt.size(2) ** 2
 
-        for idx, (input_, light_input, mask,albedo_gt) in enumerate(zip(inputs,light_inputs,masks,albedo_gts)):
+        l1_face = 5 / sz * torch.sum(torch.abs(face_estim - albedo_gt) * mask) / face_estim.shape[0]
+        l1_light = 1 / (16 * 32) * torch.sum(torch.abs(light_estim - light_input)) / face_estim.shape[0]
+        loss = l1_face + l1_light  # + tv_loss_albedo
+        # save learning_rate
+        lr_saved = self.trainer.optimizers[0].param_groups[-1]['lr']
+        lr_saved = torch.scalar_tensor(lr_saved).to(self.HG4.device)
 
-            face_estim, light_estim, gru_state = self.forward(input_, gru_state)
-            # Calculate loss
-            sz = albedo_gt.size(2) ** 2
-            # change
-            l1_face = 5 / sz * torch.sum(torch.abs(face_estim - albedo_gt) * mask) / face_estim.shape[0]
-            l1_light = 1 / (16 * 32) * torch.sum(torch.abs(light_estim - light_input)) / face_estim.shape[0]
-
-            loss += l1_face + l1_light  # + tv_loss_albedo
-
-            # save learning_rate
-            lr_saved = self.trainer.optimizers[0].param_groups[-1]['lr']
-            lr_saved = torch.scalar_tensor(lr_saved).to(self.HG4.device)
-
-            if self.log_images:
-                if self.global_step % 10 == 0:
-                    light_estim = F.interpolate(light_estim, (128, 256), mode="bilinear")
-                    light_input = F.interpolate(light_input, (128, 256), mode="bilinear")
-                    albedo_diff = 3 * torch.abs(face_estim[0:1, ...] - albedo_gt[0:1, ...])
-                    img_stack = torch.clamp(torch.cat((face_estim[0:1, ...], albedo_diff, albedo_gt[0:1, ...])), min=0,
-                                            max=1)
-                    albedo_grid = make_grid_with_labels(img_stack.detach().cpu(), ["Output", "Diff (3x)", "Target"],
+        if self.log_images:
+            if self.global_step % 10 == 0:
+                light_estim = F.interpolate(light_estim, (128, 256), mode="bilinear")
+                light_input = F.interpolate(light_input, (128, 256), mode="bilinear")
+                albedo_diff = 3 * torch.abs(face_estim[0:1, ...] - albedo_gt[0:1, ...])
+                img_stack = torch.clamp(torch.cat((face_estim[0:1, ...], albedo_diff, albedo_gt[0:1, ...])), min=0,
+                                        max=1)
+                albedo_grid = make_grid_with_labels(img_stack.detach().cpu(), ["Output", "Diff (3x)", "Target"],
+                                                    nrow=3)
+                light_diff = 3 * torch.abs(light_estim[0:1, ...] - light_input[0:1, ...])
+                img_stack = torch.clamp(torch.cat((light_estim[0:1, ...], light_diff, light_input[0:1, ...])),
+                                        min=0, max=1)
+                light_grid = make_grid_with_lightlabels(img_stack.detach().cpu(), ["Output", "Diff (3x)", "Target"],
                                                         nrow=3)
-                    light_diff = 3 * torch.abs(light_estim[0:1, ...] - light_input[0:1, ...])
-                    img_stack = torch.clamp(torch.cat((light_estim[0:1, ...], light_diff, light_input[0:1, ...])),
-                                            min=0, max=1)
-                    light_grid = make_grid_with_lightlabels(img_stack.detach().cpu(), ["Output", "Diff (3x)", "Target"],
-                                                            nrow=3)
 
-                    # self.logger.experiment.add_image('epoch_{}_step_{}_face_images_{}'.format(self.current_epoch, self.global_step, idx),albedo_grid, 0)
+                # self.logger.experiment.add_image('epoch_{}_step_{}_face_images_{}'.format(self.current_epoch, self.global_step, idx),albedo_grid, 0)
 
-                    save_image(albedo_grid,
-                               'results_face/epoch_{}_step_{}_face_images_{}.png'.format(self.current_epoch,
-                                                                                         self.global_step, idx))
+                save_image(albedo_grid,
+                           'results_face/epoch_{}_step_{}_face_images_{}.png'.format(self.current_epoch,
+                                                                                     self.global_step, idx))
 
-                    # self.logger.experiment.add_image('epoch_{}_step_{}_face_images_{}'.format(self.current_epoch, self.global_step, idx),light_grid, 0)
+                # self.logger.experiment.add_image('epoch_{}_step_{}_face_images_{}'.format(self.current_epoch, self.global_step, idx),light_grid, 0)
 
-                    save_image(light_grid,
-                               'results_light/epoch_{}_step_{}_light_images_{}.png'.format(self.current_epoch,
-                                                                                           self.global_step, idx))
+                save_image(light_grid,
+                           'results_light/epoch_{}_step_{}_light_images_{}.png'.format(self.current_epoch,
+                                                                                       self.global_step, idx))
 
-                    plt.close()
-            if self.hparams.log_graph == 1:
-                # Logging the computational graph on tensorboard
-                if self.global_step == 1:
-                    example_input_array = list()
-                    example_input_array.append(torch.rand((1, 3, 256, 256)))
-                    self.logger.experiment.add_graph(HourglassNet(self.hparams), example_input_array)
-                    print("Logged computational Graph")
+                plt.close()
+        if self.hparams.log_graph == 1:
+            # Logging the computational graph on tensorboard
+            if self.global_step == 1:
+                example_input_array = list()
+                example_input_array.append(torch.rand((1, 3, 256, 256)))
+                self.logger.experiment.add_graph(HourglassNet(self.hparams), example_input_array)
+                print("Logged computational Graph")
 
-            if self.hparams.log_histogram == 1:
-                self.custom_histogram_adder()
+        if self.hparams.log_histogram == 1:
+            self.custom_histogram_adder()
 
 
-        loss = loss / idx
         self.log('l1_face', l1_face, prog_bar=True)
         self.log('l1_light', l1_light, prog_bar=True)
         self.log('learning_rate', lr_saved, prog_bar=True)
@@ -266,27 +198,23 @@ class HourglassNet(pl.LightningModule):
 
     def validation_step(self, batch, batch_nb):
         print("Validation")
-        inputs, _, light_inputs, _, albedo_gts, masks = batch
+        input_, _, light_input, _, albedo_gt, mask = batch
         gru_state = None
-        loss = 0
-        psnr_ = []
-        for idx, (input_, light_input, mask,albedo_gt) in enumerate(zip(inputs,light_inputs,masks,albedo_gts)):
 
-            face_estim, light_estim, gru_state = self.forward(input_, gru_state)
+        face_estim, light_estim, gru_state = self.forward(input_, gru_state)
 
-            face_estim = torch.clamp(face_estim, min=0, max=1)
-            # light_estim = torch.clamp(light_estim, min=0, max=1)
+        face_estim = torch.clamp(face_estim, min=0, max=1)
+        light_estim = torch.clamp(light_estim, min=0, max=1)
 
-            # Calculate loss
-            sz = albedo_gt.size(2) ** 2
-            l1_face = 5 / sz * torch.sum(torch.abs(face_estim - albedo_gt) * mask) / face_estim.shape[0]
-            l1_light = 1 / (16 * 32) * torch.sum(torch.abs(light_estim - light_input)) / face_estim.shape[0]
+        # Calculate loss
+        sz = albedo_gt.size(2) ** 2
+        l1_face = 5 / sz * torch.sum(torch.abs(face_estim - albedo_gt) * mask) / face_estim.shape[0]
+        l1_light = 1 / (16 * 32) * torch.sum(torch.abs(light_estim - light_input)) / face_estim.shape[0]
 
-            loss += l1_face + l1_light
+        loss = l1_face + l1_light
 
-            psnr_.append(psnr(image_pred=face_estim, image_gt=albedo_gt))
+        psnr_ = psnr(image_pred=face_estim, image_gt=albedo_gt)/face_estim.shape[0]
 
-        loss = loss / idx
         self.log('val_loss', loss)
         self.log('val_loss', loss, prog_bar=True)
 
@@ -298,7 +226,7 @@ class HourglassNet(pl.LightningModule):
 
     def validation_epoch_end(self, outputs):
         avg_loss = torch.stack([x['val_loss'] for x in outputs]).mean()
-        self.psnr_table(outputs, 'val_psnr')
+        # self.psnr_table(outputs, 'val_psnr')
         self.log('avg_valloss', avg_loss, prog_bar=True)
         return {'avg_valloss': avg_loss}
 
