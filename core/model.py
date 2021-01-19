@@ -77,7 +77,7 @@ class HourglassNet(pl.LightningModule):
         self.blur = GaussianBlur(5)
 
         self.ncLight = 4  #  number of channels for input to lighting network
-        self.baseFilter =16
+        self.baseFilter = 32
         self.ncPre = self.baseFilter  # number of channels for pre-convolution
 
         self.ncHG4 = self.baseFilter
@@ -92,7 +92,7 @@ class HourglassNet(pl.LightningModule):
         # self.gru = ConvGRU(input_size=self.ncPre, hidden_sizes=[64, self.ncPre],
         #                    kernel_sizes=[3, 3], n_layers=2)
 
-        self.light = lightingNet(128)
+        self.light = lightingNet(256)
         # self.HG0 = HourglassBlock(self.ncHG1, self.ncHG0, self.light)
         self.HG1 = HourglassBlock(self.ncHG2, self.ncHG1, self.light)
         self.HG2 = HourglassBlock(self.ncHG3, self.ncHG2, self.HG1)
@@ -141,39 +141,34 @@ class HourglassNet(pl.LightningModule):
         # Calculate loss
         sz = albedo_gt.size(2) ** 2
 
-        l1_face = 5 / sz * torch.sum(torch.abs(face_estim - albedo_gt) * mask) / face_estim.shape[0]
-        l1_light = 1 / (16 * 32) * torch.sum(torch.abs(light_estim - light_input)) / face_estim.shape[0]
-        loss = l1_face + l1_light  # + tv_loss_albedo
-        # save learning_rate
+        l1_face = 5 / sz * torch.sum(torch.abs(face_estim - albedo_gt)) / face_estim.shape[0]
+        # l1_light = 1 / (16 * 32) * torch.sum(torch.abs(light_estim - light_input)) / face_estim.shape[0]
+        loss = l1_face #
         lr_saved = self.trainer.optimizers[0].param_groups[-1]['lr']
         lr_saved = torch.scalar_tensor(lr_saved).to(self.HG4.device)
 
         if self.log_images:
             if self.global_step % 10 == 0:
-                light_estim = F.interpolate(light_estim, (128, 256), mode="bilinear")
-                light_input = F.interpolate(light_input, (128, 256), mode="bilinear")
+                # light_estim = F.interpolate(light_estim, (128, 256), mode="bilinear")
+                # light_input = F.interpolate(light_input, (128, 256), mode="bilinear")
                 albedo_diff = 3 * torch.abs(face_estim[0:1, ...] - albedo_gt[0:1, ...])
                 img_stack = torch.clamp(torch.cat((face_estim[0:1, ...], albedo_diff, albedo_gt[0:1, ...])), min=0,
                                         max=1)
                 albedo_grid = make_grid_with_labels(img_stack.detach().cpu(), ["Output", "Diff (3x)", "Target"],
                                                     nrow=3)
-                light_diff = 3 * torch.abs(light_estim[0:1, ...] - light_input[0:1, ...])
-                img_stack = torch.clamp(torch.cat((light_estim[0:1, ...], light_diff, light_input[0:1, ...])),
-                                        min=0, max=1)
-                light_grid = make_grid_with_lightlabels(img_stack.detach().cpu(), ["Output", "Diff (3x)", "Target"],
-                                                        nrow=3)
-
-                # self.logger.experiment.add_image('epoch_{}_step_{}_face_images_{}'.format(self.current_epoch, self.global_step, idx),albedo_grid, 0)
+                # light_diff = 3 * torch.abs(light_estim[0:1, ...] - light_input[0:1, ...])
+                # img_stack = torch.clamp(torch.cat((light_estim[0:1, ...], light_diff, light_input[0:1, ...])),
+                #                         min=0, max=1)
+                # light_grid = make_grid_with_lightlabels(img_stack.detach().cpu(), ["Output", "Diff (3x)", "Target"],
+                #                                         nrow=3)
 
                 save_image(albedo_grid,
-                           'results_face/epoch_{}_step_{}_face_images_{}.png'.format(self.current_epoch,
-                                                                                     self.global_step, idx))
-
-                # self.logger.experiment.add_image('epoch_{}_step_{}_face_images_{}'.format(self.current_epoch, self.global_step, idx),light_grid, 0)
-
-                save_image(light_grid,
-                           'results_light/epoch_{}_step_{}_light_images_{}.png'.format(self.current_epoch,
-                                                                                       self.global_step, idx))
+                           'results_face/epoch_{}_step_{}_face_images.png'.format(self.current_epoch,
+                                                                                     self.global_step))
+                #
+                # save_image(light_grid,
+                #            'results_light/epoch_{}_step_{}_light_images.png'.format(self.current_epoch,
+                #                                                                        self.global_step))
 
                 plt.close()
         if self.hparams.log_graph == 1:
@@ -189,7 +184,7 @@ class HourglassNet(pl.LightningModule):
 
 
         self.log('l1_face', l1_face, prog_bar=True)
-        self.log('l1_light', l1_light, prog_bar=True)
+        # self.log('l1_light', l1_light, prog_bar=True)
         self.log('learning_rate', lr_saved, prog_bar=True)
         self.log('train_loss', loss)
 
@@ -201,17 +196,17 @@ class HourglassNet(pl.LightningModule):
         input_, _, light_input, _, albedo_gt, mask = batch
         gru_state = None
 
-        face_estim, light_estim, gru_state = self.forward(input_, gru_state)
+        face_estim, light_estim = self.forward(input_)
 
         face_estim = torch.clamp(face_estim, min=0, max=1)
         light_estim = torch.clamp(light_estim, min=0, max=1)
 
         # Calculate loss
         sz = albedo_gt.size(2) ** 2
-        l1_face = 5 / sz * torch.sum(torch.abs(face_estim - albedo_gt) * mask) / face_estim.shape[0]
-        l1_light = 1 / (16 * 32) * torch.sum(torch.abs(light_estim - light_input)) / face_estim.shape[0]
+        l1_face = 5 / sz * torch.sum(torch.abs(face_estim - albedo_gt) ) / face_estim.shape[0]
+        # l1_light = 1 / (16 * 32) * torch.sum(torch.abs(light_estim - light_input)) / face_estim.shape[0]
 
-        loss = l1_face + l1_light
+        loss = l1_face
 
         psnr_ = psnr(image_pred=face_estim, image_gt=albedo_gt)/face_estim.shape[0]
 
@@ -275,12 +270,12 @@ class HourglassNet(pl.LightningModule):
 
         parser.add_argument('--log_images', default=1, type=int,
                             help='Log intermediate training results')
-        parser.add_argument('--log_graph', default=1, type=int,
-                            help='Log compuational graph on tensorboard')
+        parser.add_argument('--log_graph', default=0, type=int,
+                            help='Log computational graph on tensorboard')
         parser.add_argument('--log_histogram', default=0, type=int,
                             help='Log histogram for weights and bias')
-        parser.add_argument('--batch_size', default=8, type=int)
-        parser.add_argument('--learning_rate', default=2e-3, type=float)
+        parser.add_argument('--batch_size', default=32, type=int)
+        parser.add_argument('--learning_rate', default=2e-4, type=float)
         parser.add_argument('--momentum', default=0.9, type=float,
                             help='SGD momentum (default: 0.9)')
         parser.add_argument('--weight_decay', '--wd', default=1e-6, type=float,
