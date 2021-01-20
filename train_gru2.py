@@ -14,11 +14,7 @@ def main(hparams):
     # 1 INIT LIGHTNING MODEL
     # ------------------------
     net = HourglassNet(hparams=hparams)
-    # checkpoint = torch.load("tb_logs/relightnet/version_29/checkpoints/epoch=1788.ckpt")
-    # net.load_state_dict(checkpoint["state_dict"])
     logger = TensorBoardLogger("tb_logs", name="relightnet")
-    #logger2 = CSVLogger('Csv')
-
     # ------------------------
     # 2 INIT TRAINER
     # ------------------------

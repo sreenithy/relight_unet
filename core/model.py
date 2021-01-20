@@ -142,33 +142,33 @@ class HourglassNet(pl.LightningModule):
         sz = albedo_gt.size(2) ** 2
 
         l1_face = 5 / sz * torch.sum(torch.abs(face_estim - albedo_gt)) / face_estim.shape[0]
-        # l1_light = 1 / (16 * 32) * torch.sum(torch.abs(light_estim - light_input)) / face_estim.shape[0]
-        loss = l1_face #
+        l1_light = 1 / (16 * 32) * torch.sum(torch.abs(light_estim - light_input)) / face_estim.shape[0]
+        loss = l1_face + l1_light
         lr_saved = self.trainer.optimizers[0].param_groups[-1]['lr']
         lr_saved = torch.scalar_tensor(lr_saved).to(self.HG4.device)
 
         if self.log_images:
             if self.global_step % 10 == 0:
-                # light_estim = F.interpolate(light_estim, (128, 256), mode="bilinear")
-                # light_input = F.interpolate(light_input, (128, 256), mode="bilinear")
+                light_estim = F.interpolate(light_estim, (128, 256), mode="bilinear")
+                light_input = F.interpolate(light_input, (128, 256), mode="bilinear")
                 albedo_diff = 3 * torch.abs(face_estim[0:1, ...] - albedo_gt[0:1, ...])
-                img_stack = torch.clamp(torch.cat((face_estim[0:1, ...], albedo_diff, albedo_gt[0:1, ...])), min=0,
+                img_stack = torch.clamp(torch.cat((face_estim[0:1, ...], albedo_diff, albedo_gt[0:1, ...], input_[0:1, ...])), min=0,
                                         max=1)
-                albedo_grid = make_grid_with_labels(img_stack.detach().cpu(), ["Output", "Diff (3x)", "Target"],
-                                                    nrow=3)
-                # light_diff = 3 * torch.abs(light_estim[0:1, ...] - light_input[0:1, ...])
-                # img_stack = torch.clamp(torch.cat((light_estim[0:1, ...], light_diff, light_input[0:1, ...])),
-                #                         min=0, max=1)
-                # light_grid = make_grid_with_lightlabels(img_stack.detach().cpu(), ["Output", "Diff (3x)", "Target"],
-                #                                         nrow=3)
-
+                albedo_grid = make_grid_with_lightlabels(img_stack.detach().cpu(), ["Output", "Diff (3x)", "Target" , "Input"],
+                                                    nrow=4)
                 save_image(albedo_grid,
                            'results_face/epoch_{}_step_{}_face_images.png'.format(self.current_epoch,
-                                                                                     self.global_step))
-                #
-                # save_image(light_grid,
-                #            'results_light/epoch_{}_step_{}_light_images.png'.format(self.current_epoch,
-                #                                                                        self.global_step))
+                                                                                  self.global_step))
+
+                light_diff = 3 * torch.abs(light_estim[0:1, ...] - light_input[0:1, ...])
+                img_stack = torch.clamp(torch.cat((light_estim[0:1, ...], light_diff, light_input[0:1, ...])),
+                                        min=0, max=1)
+                light_grid = make_grid_with_lightlabels(img_stack.detach().cpu(), ["Output", "Diff (3x)", "Target"],
+                                                        nrow=3)
+
+                save_image(light_grid,
+                           'results_light/epoch_{}_step_{}_light_images.png'.format(self.current_epoch,
+                                                                                       self.global_step))
 
                 plt.close()
         if self.hparams.log_graph == 1:
@@ -204,9 +204,9 @@ class HourglassNet(pl.LightningModule):
         # Calculate loss
         sz = albedo_gt.size(2) ** 2
         l1_face = 5 / sz * torch.sum(torch.abs(face_estim - albedo_gt) ) / face_estim.shape[0]
-        # l1_light = 1 / (16 * 32) * torch.sum(torch.abs(light_estim - light_input)) / face_estim.shape[0]
+        l1_light = 1 / (16 * 32) * torch.sum(torch.abs(light_estim - light_input)) / face_estim.shape[0]
 
-        loss = l1_face
+        loss = l1_face +l1_light
 
         psnr_ = psnr(image_pred=face_estim, image_gt=albedo_gt)/face_estim.shape[0]
 
