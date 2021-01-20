@@ -19,37 +19,38 @@ numbers = re.compile(r'(\d+)')
 torch.manual_seed(0)
 np.random.seed(0)
 random.seed(0)
-im_mul = [1.967532642055168, 2.1676019290963535, 2.747103618770585]
-albedo_mul = [2.319305570225163, 2.353142937714471, 2.437376604762663]
+import cv2
+# im_mul = [1.967532642055168, 2.1676019290963535, 2.747103618770585]
+# albedo_mul = [2.319305570225163, 2.353142937714471, 2.437376604762663]
 RES = 256
 def numericalSort(value):
     parts = numbers.split(value)
     parts[1::2] = map(int, parts[1::2])
     return parts
 
-import cv2
+
 def colour_jitter(ip, ip_light, op, op_light):
-    bright_ip = torch.tensor(1.0).uniform_(0.7, 1.3).item()
+    bright_ip = torch.tensor(1.0).uniform_(0.7, 1).item()
     ip = TF.adjust_brightness(ip, bright_ip)
     ip_light = TF.adjust_brightness(ip_light, bright_ip)
 
-    bright_op = torch.tensor(1.0).uniform_(0.7, 1.3).item()
+    bright_op = torch.tensor(1.0).uniform_(0.7, 1).item()
     op = TF.adjust_brightness(op, bright_op)
     op_light = TF.adjust_brightness(op_light, bright_op)
 
-    contrast_factor = torch.tensor(1.0).uniform_(0.7, 1.3).item()
+    contrast_factor = torch.tensor(1.0).uniform_(0.7, 1).item()
     ip = TF.adjust_gamma(ip, contrast_factor)
     ip_light = TF.adjust_gamma(ip_light, contrast_factor)
 
-    contrast_factor = torch.tensor(1.0).uniform_(0.7, 1.3).item()
+    contrast_factor = torch.tensor(1.0).uniform_(0.7, 1).item()
     op = TF.adjust_gamma(op, contrast_factor)
     op_light = TF.adjust_gamma(op_light, contrast_factor)
 
-    saturation_factor = torch.tensor(1.0).uniform_(0.7, 1.3).item()
+    saturation_factor = torch.tensor(1.0).uniform_(0.7, 1).item()
     ip = TF.adjust_saturation(ip, saturation_factor)
     ip_light = TF.adjust_saturation(ip_light, saturation_factor)
 
-    saturation_factor = torch.tensor(1.0).uniform_(0.7, 1.3).item()
+    saturation_factor = torch.tensor(1.0).uniform_(0.7, 1).item()
     op = TF.adjust_saturation(op, saturation_factor)
     op_light = TF.adjust_saturation(op_light, saturation_factor)
 
@@ -71,32 +72,22 @@ def modify_mask(ip):
     ip = torch.from_numpy(ip).float()
     return ip
 
-def modifylight(ip):
+def modify(ip):
     ip = np.array(ip)
     ip = ip.astype(np.float32) / 255.0
     ip = ip.transpose((2, 0, 1))  # c,h,w
     ip = torch.from_numpy(ip).float()
     return ip
 
-def modify(ip, ratio):
-    #ip = np.array(ip)
-    ip = ip.astype(np.float32)/255
-    ip = ip*ratio
-    #ip = np.clip(ip, 0, 1)
-    ip = cv2.normalize(ip, None, alpha=0, beta=1, norm_type=cv2.NORM_MINMAX, dtype=cv2.CV_32F)
-    ip = ip.transpose((2, 0, 1))  # c,h,w
-    ip = torch.from_numpy(ip).float()
-    return ip
 
-def read(path):
-
+def preprocess(path):
     a = Image.open(path)
     a = np.array(a.resize((RES, RES)))
     return a
 
 class LightStageFrames(Dataset):
 
-    def __init__(self, path, transform=None):
+    def __init__(self, path):
         # Get a list of { (identity+light) : filename }
         self.dataList = defaultdict(list)
         # for f in sorted(glob.glob(str(path / "*.png")), key=numericalSort):
@@ -104,11 +95,14 @@ class LightStageFrames(Dataset):
             self.dataList["_".join(f.split("_")[:3])].append(f)
 
         self.dataKeys = list(self.dataList.keys())
-        self.transform = transform
+
         self.path = str(path)
         myfile = open('mean_adjustment.txt', "rt")
         self.contents = myfile.read()
         myfile.close()
+        self.transform = transforms.Compose([
+            transforms.Normalize(mean=[0.25412539, 0.23066966, 0.18200988], std=[0.25412539, 0.23066966, 0.18200988])
+        ])
 
     def __len__(self):
         return len(self.dataKeys)
@@ -120,10 +114,7 @@ class LightStageFrames(Dataset):
         l = str(os.path.splitext(os.path.basename(img_path))[0].split("_")[-1])
         v = int(os.path.splitext(os.path.basename(img_path))[0].split("_")[1])
         #print("in process",img_path,l,v)
-        relit_mask = 'mask/' + img_id + '_' + str(v) + '.png'
-        relit_mask = Image.open(relit_mask)
-        relit_mask = relit_mask.resize((RES, RES))
-        relit_mask = np.array(relit_mask)
+        relit_mask = preprocess('mask/' + img_id + '_' + str(v) + '.png')
         relit_mask = np.tile(relit_mask[:, :, np.newaxis], (1, 1, 3))
 
         ip = Image.open(img_path)
@@ -136,36 +127,22 @@ class LightStageFrames(Dataset):
         ip = cv2.bitwise_and(ip, relit_mask)
         # plt.imshow(ip);plt.show()
 
-        ip = modify(ip, im_mul)
-        ip_light = modifylight(ip_light)
-        # mask_path = 'albedo_mask/' + img_id + '.png'
-        mask_path = 'mask/' + img_id + '_' + str(v) +'.png'
-        # full = 'Full/{}.png'.format(img_id)
-        full = 'Fullview/' + img_id + '_' + str(v).zfill(2) + '.png'
-        # print( img_path, full, light_path, mask_path, v, l)
-        mask = Image.open(mask_path)
-        mask = mask.resize((RES, RES))
-        # relit_mask = np.tile(relit_mask[:, :, np.newaxis], (1, 1, 3))
-        mask = modify_mask(mask)
+        ip = modify(ip)
+        ip_light = modify(ip_light)
 
-        fullimgip = Image.open(full)
-        fullimgip = fullimgip.resize((RES, RES))
-        fullimgip = np.array(fullimgip)
+        full = 'Fullview/' + img_id + '_' + str(v).zfill(2) + '.png'
+        fullimgip = preprocess(full)
         fullimgip = cv2.bitwise_and(fullimgip, relit_mask)
-        fullimgip = modify(fullimgip, albedo_mul)
-        return ip, [], ip_light, [], mask, fullimgip
+        fullimgip = modify(fullimgip)
+        return ip, [], ip_light, [], [], fullimgip
 
     def _processlaval(self, img_path, RES):
         img_id = str(os.path.splitext(os.path.basename(img_path))[0].split("_")[0])
         l = str(os.path.splitext(os.path.basename(img_path))[0].split("_")[-1])
         v = int(os.path.splitext(os.path.basename(img_path))[0].split("_")[1])
-        relit_mask = 'mask/' + img_id + '_' + str(v) + '.png'
-        relit_mask = Image.open(relit_mask)
-        relit_mask = relit_mask.resize((RES, RES))
-        relit_mask = np.array(relit_mask)
+        relit_mask = preprocess('mask/' + img_id + '_' + str(v) + '.png')
         relit_mask = np.tile(relit_mask[:, :, np.newaxis], (1, 1, 3))
 
-        #print("in process", img_path, l, v,'lightmat/' + l + '_' + str(v) + '.mat')
         ip = Image.open(img_path)
         ip = ip.resize((RES, RES))
         name = str(img_path.split(".")[0])
@@ -176,31 +153,20 @@ class LightStageFrames(Dataset):
         ip, ip_light, _, _ = colour_jitter(ip, ip_light, ip, ip_light)
         ip = np.array(ip)
         ip = cv2.bitwise_and(ip, relit_mask)
-        ip = modify(ip, im_mul)
-        ip_light = modifylight(ip_light)
+        ip = modify(ip)
+        ip_light = modify(ip_light)
 
-        # mask_path = 'albedo_mask/' + img_id + '.png'
-        mask_path = 'mask/' + img_id + '_' + str(v) + '.png'
         full = 'Fullview/' + img_id +'_'+str(v).zfill(2)+'.png'
-
-        # print( img_path, full, mask_path, v, l)
-        mask = Image.open(mask_path)
-        mask = mask.resize((RES, RES))
-        mask = modify_mask(mask)
-
-        fullimgip = Image.open(full)
-        fullimgip = fullimgip.resize((RES, RES))
-        fullimgip = np.array(fullimgip)
+        fullimgip = preprocess(full)
         fullimgip = cv2.bitwise_and(fullimgip, relit_mask)
-        fullimgip = modify(fullimgip, albedo_mul)
+        fullimgip = modify(fullimgip)
 
-        return ip, [], ip_light, [], mask, fullimgip
+        return ip, [], ip_light, [], [], fullimgip
 
     def __getitem__(self, index):
 
         RES = 256
         img_path = self.dataList[self.dataKeys[index]]
-        # l = str(os.path.splitext(os.path.basename(img_path[0]))[0])
         l = str(os.path.splitext(os.path.basename(img_path[0]))[0]).split("_")[-1]
         if l in ['10', '11', '13', '20', '21', '23', '24', '25', '26', '34', '35', '36', '37', '38', '39', '41',
                  '48', '49', '50', '53', '55', '56', '57', '61', '62', '63', '64', '65', '66', '67', '68', '69', '70',
@@ -208,14 +174,13 @@ class LightStageFrames(Dataset):
                  '95', '96', '97', '98', '101', '102', '103', '104', '105', '106', '107', '108', '109', '110', '114',
                  '115', '116', '117', '118', '119', '120', '121', '122', '123', '125', '126', '127', '128', '129',
                  '130', '131', '133', '134', '135', '136', '137', '138', '141', '142', '143', '144', '146','147', '149']:
-            img, _, light, _, mask, fullimg = self._processolat(img_path[0], RES)
+            img, _, light, _, _, fullimg = self._processolat(img_path[0], RES)
         else:
-            img, _, light, _, mask, fullimg = self._processlaval(img_path[0], RES)
-
-        return img, [], light, [], fullimg,mask
+            img, _, light, _, _, fullimg = self._processlaval(img_path[0], RES)
+        img = self.transform(img)
+        return img, [], light, [], fullimg,[]
 
     def lightprocess(self, e, name):
-        #print("e",name)
         regex = r"^\b(?=\w)" + re.escape(name) + ".\d+\S+"
         matches = re.finditer(regex, self.contents, re.MULTILINE)
         for matchNum, match in enumerate(matches, start=1):

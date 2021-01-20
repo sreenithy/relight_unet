@@ -26,7 +26,7 @@ def main(hparams):
                          gpus=hparams.gpus,
                          prepare_data_per_node=False,
                          profiler=False,
-                         distributed_backend=hparams.distributed_backend, resume_from_checkpoint='tb_logs/relightnet/version_60/checkpoints/epoch=25.ckpt',
+                         distributed_backend=hparams.distributed_backend,
                          logger=logger,replace_sampler_ddp=False)
 
     # ------------------------
@@ -66,13 +66,13 @@ if __name__ == '__main__':
     parent_parser.add_argument(
         '--gpus',
         type=int,
-        default=2,
+        default=1,
         help='how many gpus'
     )
     parent_parser.add_argument(
         '--distributed_backend',
         type=str,
-        default='ddp',
+        default='dp',
         help='supports three options dp, ddp, ddp2'
     )
     parent_parser.add_argument(

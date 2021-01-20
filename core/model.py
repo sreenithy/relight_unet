@@ -109,7 +109,7 @@ class HourglassNet(pl.LightningModule):
         self.output = nn.Conv2d(self.ncPre, 3, kernel_size=1, stride=1, padding=0)
         self.save_hyperparameters()
 
-        # # self.light_model = self.__build_light_model()
+
         # inputs = np.concatenate((np.ones((1, 1, 16, 32)), generate_input_channels(harmonics=3)[np.newaxis, ...]),
         #                         axis=1)
         # self.register_buffer("light_inputs", torch.from_numpy(inputs).float())
@@ -136,7 +136,7 @@ class HourglassNet(pl.LightningModule):
     def training_step(self, batch, batch_nb):
         # print("Current epoch",self.current_epoch)
         # self.trainer.optimizers[0].param_groups[-1]['lr'] = 2e-5
-        input_, _, light_input, _, albedo_gt, mask = batch
+        input_, _, light_input, _, albedo_gt, _ = batch
         face_estim, light_estim = self.forward(input_)
         # Calculate loss
         sz = albedo_gt.size(2) ** 2
@@ -193,7 +193,7 @@ class HourglassNet(pl.LightningModule):
 
     def validation_step(self, batch, batch_nb):
         print("Validation")
-        input_, _, light_input, _, albedo_gt, mask = batch
+        input_, _, light_input, _, albedo_gt, _ = batch
         gru_state = None
 
         face_estim, light_estim = self.forward(input_)

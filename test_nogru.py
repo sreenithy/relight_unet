@@ -83,7 +83,7 @@ dataset_test = LightStageFrames(Path("biden_texture/"))
 length = len(dataset_test.dataList)
 print(length)
 RES=256
-chk_pt = 'tb_logs/relightnet/version_60/checkpoints/epoch=25.ckpt'
+chk_pt = 'tb_logs/relightnet/version_65/checkpoints/epoch=63.ckpt'
 net = HourglassNet.load_from_checkpoint(chk_pt).to(device)
 net.eval()
 
