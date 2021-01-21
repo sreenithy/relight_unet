@@ -129,14 +129,11 @@ class HourglassNet(pl.LightningModule):
         feat = F.relu(self.bn_3(self.conv_3(feat)))
         out_img = self.output(feat)
         albedo_estim = torch.sigmoid(out_img)
-
         return albedo_estim, light_estim
 
 
-
     def training_step(self, batch, batch_nb):
-        # print("Current epoch",self.current_epoch)
-        # self.trainer.optimizers[0].param_groups[-1]['lr'] = 2e-5
+        self.trainer.optimizers[0].param_groups[-1]['lr'] = 2e-4
         input_, _, light_input, _, albedo_gt, _ = batch
         face_estim, light_estim = self.forward(input_)
         # Calculate loss
@@ -277,7 +274,7 @@ class HourglassNet(pl.LightningModule):
                             help='Log computational graph on tensorboard')
         parser.add_argument('--log_histogram', default=0, type=int,
                             help='Log histogram for weights and bias')
-        parser.add_argument('--batch_size', default=16, type=int)
+        parser.add_argument('--batch_size', default=20, type=int)
         parser.add_argument('--learning_rate', default=2e-3, type=float)
         parser.add_argument('--momentum', default=0.9, type=float,
                             help='SGD momentum (default: 0.9)')

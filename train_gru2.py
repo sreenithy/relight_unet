@@ -22,7 +22,7 @@ def main(hparams):
                          gpus=hparams.gpus,
                          prepare_data_per_node=False,
                          profiler=False,
-                         distributed_backend=hparams.distributed_backend,
+                         distributed_backend=hparams.distributed_backend,resume_from_checkpoint='tb_logs/relightnet/version_29/checkpoints/epoch=326.ckpt',
                          logger=logger,replace_sampler_ddp=False)
 
     # ------------------------
