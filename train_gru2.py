@@ -30,18 +30,18 @@ def main(hparams):
     # ------------------------
     # Run learning rate finder
     # lr_finder = trainer.tuner.lr_find(net)
-
+    #
     # # Results can be found in
     # print(lr_finder.results)
-
+    #
     # # Plot with
     # fig = lr_finder.plot(suggest=True)
     # fig.show()
-
+    #
     # # Pick point based on plot, or get suggestion
     # new_lr = lr_finder.suggestion()
     # print("new_lr", new_lr)
-
+    #
     # # update hparams of the model
     # net.hparams.learning_rate = new_lr
     # print(new_lr)
@@ -62,13 +62,13 @@ if __name__ == '__main__':
     parent_parser.add_argument(
         '--gpus',
         type=int,
-        default=1,
+        default=2,
         help='how many gpus'
     )
     parent_parser.add_argument(
         '--distributed_backend',
         type=str,
-        default='dp',
+        default='ddp',
         help='supports three options dp, ddp, ddp2'
     )
     parent_parser.add_argument(

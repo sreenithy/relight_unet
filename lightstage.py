@@ -79,7 +79,6 @@ def modify(ip):
     ip = torch.from_numpy(ip).float()
     return ip
 
-
 def preprocess(path):
     a = Image.open(path)
     a = np.array(a.resize((RES, RES)))

@@ -76,14 +76,11 @@ def modify(ip, ratio):
     ip = torch.from_numpy(ip).float()
     return ip
 
-im_mul = [1.967532642055168, 2.1676019290963535, 2.747103618770585]
-albedo_mul = [2.319305570225163, 2.353142937714471, 2.437376604762663]
-
-dataset_test = LightStageFrames(Path("biden_texture/"))
+dataset_test = LightStageFrames(Path("test/"))
 length = len(dataset_test.dataList)
 print(length)
 RES=256
-chk_pt = 'tb_logs/relightnet/version_65/checkpoints/epoch=63.ckpt'
+chk_pt = 'tb_logs/relightnet/version_28/checkpoints/epoch=309.ckpt'#tb_logs/relightnet/version_65/checkpoints/epoch=63.ckpt'
 net = HourglassNet.load_from_checkpoint(chk_pt).to(device)
 net.eval()
 
