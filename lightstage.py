@@ -79,6 +79,7 @@ def modify(ip):
     ip = torch.from_numpy(ip).float()
     return ip
 
+
 def preprocess(path):
     a = Image.open(path)
     a = np.array(a.resize((RES, RES)))
@@ -176,8 +177,7 @@ class LightStageFrames(Dataset):
             img, _, light, _, _, fullimg = self._processolat(img_path[0], RES)
         else:
             img, _, light, _, _, fullimg = self._processlaval(img_path[0], RES)
-        img = self.transform(img)
-        light = self.transform(light)
+        # img = self.transform(img)
         return img, [], light, [], fullimg,[]
 
     def lightprocess(self, e, name):

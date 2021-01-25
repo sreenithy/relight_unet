@@ -34,18 +34,13 @@ def obtainimg(dataset_test,index):
 def process( img_path, RES):
     ip = Image.open(img_path)
     ip = ip.resize((RES, RES))
-    ip = modify(ip, 1)
+    ip = modify(ip)
     return ip
 
 def normlight(image,  filename):
     image = image[0].cpu().data.numpy()
     image = image.transpose((1, 2, 0))
     image = image*255
-    # a1 = np.clip(image, 0, 255)
-    #plt.imshow(image);plt.show()
-    # a = cv2.normalize(image, None, alpha=0, beta=255, norm_type=cv2.NORM_MINMAX, dtype=cv2.CV_32F)
-    # a = a1.astype(np.uint8)
-    #imsave(filename,np.clip(255. * image, 0, 255).astype('uint8'))
     imsave(filename, image)
 
 def normaliseimg(image, filename):
@@ -63,17 +58,16 @@ def modify(ip):
     ip = np.array(ip)
     ip = ip[:,:,:3]
     ip = ip.astype(np.float32)/255
-    # ip = cv2.normalize(ip, None, alpha=0, beta=1, norm_type=cv2.NORM_MINMAX, dtype=cv2.CV_32F)
     ip = ip.transpose((2, 0, 1))
     ip = ip[None, ...]
     ip = torch.from_numpy(ip).float()
     return ip
 
-dataset_test = LightStageFrames(Path("test/"))
+dataset_test = LightStageFrames(Path("s2/"))
 length = len(dataset_test.dataList)
 print(length)
 RES=256
-chk_pt = 'tb_logs/relightnet/version_30/checkpoints/epoch=361.ckpt'
+chk_pt = 'tb_logs/relightnet/version_101/checkpoints/epoch=413.ckpt'#tb_logs/relightnet/version_30/checkpoints/epoch=361.ckpt'
 net = HourglassNet.load_from_checkpoint(chk_pt).to(device)
 net.eval()
 
@@ -85,4 +79,4 @@ for idx in range(len(dataset_test)):
         albedo_estim, light_estim = net(IP)
         name = (os.path.splitext(os.path.basename(img_path))[0].split(".")[0])
         normaliseimg(light_estim,  '1/' + name +'.png')
-        normaliseimg(albedo_estim,  '2/' + name + '.png')
+        normaliseimg(albedo_estim,  's2/' + name + '_relit.png')

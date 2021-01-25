@@ -133,10 +133,9 @@ class HourglassNet(pl.LightningModule):
 
 
     def training_step(self, batch, batch_nb):
-        self.trainer.optimizers[0].param_groups[-1]['lr'] = 2e-4
+        self.trainer.optimizers[0].param_groups[-1]['lr'] = 2e-5
         input_, _, light_input, _, albedo_gt, _ = batch
         face_estim, light_estim = self.forward(input_)
-        # Calculate loss
         sz = albedo_gt.size(2) ** 2
 
         l1_face = 6 / sz * torch.sum(torch.abs(face_estim - albedo_gt)) / face_estim.shape[0]
@@ -144,7 +143,7 @@ class HourglassNet(pl.LightningModule):
         l_msssim = (1 - m(albedo_gt, face_estim))*1000
         # l_light_msssim = (1 - m(light_input, light_estim))*5000
 
-        loss = l1_face + l1_light +l_msssim #+l_light_msssim
+        loss = l1_face + l1_light +l_msssim
         lr_saved = self.trainer.optimizers[0].param_groups[-1]['lr']
         lr_saved = torch.scalar_tensor(lr_saved).to(self.HG4.device)
 
@@ -208,9 +207,10 @@ class HourglassNet(pl.LightningModule):
         l1_face = 6 / sz * torch.sum(torch.abs(face_estim - albedo_gt) ) / face_estim.shape[0]
         l1_light = 4 / (16 * 32) * torch.sum(torch.abs(light_estim - light_input)) / face_estim.shape[0]
         l_msssim = (1 - m(albedo_gt, face_estim)) * 1000
+        # print(light_estim.size(),light_input.size())
         # l_light_msssim = (1 - m(light_input, light_estim)) * 5000
 
-        loss = l1_face + l1_light  +l_msssim #+l_light_msssim
+        loss = l1_face + l1_light  +l_msssim
 
         psnr_ = psnr(image_pred=face_estim, image_gt=albedo_gt)/face_estim.shape[0]
 
@@ -275,7 +275,7 @@ class HourglassNet(pl.LightningModule):
         parser.add_argument('--log_histogram', default=0, type=int,
                             help='Log histogram for weights and bias')
         parser.add_argument('--batch_size', default=20, type=int)
-        parser.add_argument('--learning_rate', default=2e-3, type=float)
+        parser.add_argument('--learning_rate', default=2e-5, type=float)
         parser.add_argument('--momentum', default=0.9, type=float,
                             help='SGD momentum (default: 0.9)')
         parser.add_argument('--weight_decay', '--wd', default=1e-6, type=float,
