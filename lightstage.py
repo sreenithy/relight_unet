@@ -92,7 +92,7 @@ class LightStageFrames(Dataset):
         return ip, op, ip_light, op_light, [], []
 
     def __getitem__(self, index):
-        if self.path == 'train':
+        if self.path == 'train_s':
             divby = 28
         else:
             divby = 8

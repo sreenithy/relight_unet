@@ -217,8 +217,8 @@ class HourglassNet(pl.LightningModule):
         return [optimizer], [scheduler]
 
     def __dataloader(self):
-        dataset_train = LightStageFrames(Path("train/"))
-        dataset_val = LightStageFrames(Path("val/"))
+        dataset_train = LightStageFrames(Path("train_s/"))
+        dataset_val = LightStageFrames(Path("val_s/"))
         train_loader = FastDataLoader(dataset_train, batch_size=self.batch_size, num_workers=self.num_workers,
                                       pin_memory=True, shuffle=True)
         val_loader = DataLoader(dataset_val, batch_size=self.batch_size, pin_memory=True, shuffle=False)
@@ -242,7 +242,7 @@ class HourglassNet(pl.LightningModule):
                             help='Log computational graph on tensorboard')
         parser.add_argument('--log_histogram', default=0, type=int,
                             help='Log histogram for weights and bias')
-        parser.add_argument('--batch_size', default=4, type=int)
+        parser.add_argument('--batch_size', default=32, type=int)
         parser.add_argument('--learning_rate', default=1e-5, type=float)
         parser.add_argument('--momentum', default=0.9, type=float,
                             help='SGD momentum (default: 0.9)')

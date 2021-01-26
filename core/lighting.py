@@ -26,14 +26,15 @@ class lightingNet(pl.LightningModule):
         self.ncInput = ncInput
         self.net1 = nn.Sequential(
             nn.Conv2d(512, 512, kernel_size=3, padding=1),
-            nn.GroupNorm(num_groups=2, num_channels=512),
+            nn.GroupNorm(num_groups=256, num_channels=512),
+            # nn.InstanceNorm2d(512),
             nn.PReLU())
         self.block1 = nn.Sequential(nn.Conv2d(self.ncInput,1536, kernel_size=(1,1)),nn.PReLU())
         self.block2 = nn.Sequential(nn.Conv2d(self.ncInput, 512, kernel_size=(1,1)), nn.PReLU())
         self.net2 = nn.Sequential(
             nn.Conv2d(1536, 512, kernel_size=1),
-            nn.GroupNorm(num_groups=2, num_channels=512),
-            nn.InstanceNorm2d(512),
+            nn.GroupNorm(num_groups=256, num_channels=512),
+            # nn.InstanceNorm2d(512),
             nn.PReLU())
 
 

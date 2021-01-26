@@ -17,18 +17,18 @@ class TripleUp(nn.Module):
 
         self.net1 = nn.Sequential(
             nn.ConvTranspose2d(in_ch, in_ch // 2, kernel_size=3, stride=1, padding=1),
-            nn.InstanceNorm2d(out_ch),
-            # nn.GroupNorm(num_groups=2, num_channels=out_ch),
+            # nn.InstanceNorm2d(out_ch),
+            nn.GroupNorm(num_groups=out_ch //2, num_channels=out_ch),
             nn.PReLU())
         self.net2 = nn.Sequential(
             nn.ConvTranspose2d(in_ch, in_ch // 2, kernel_size=3, stride=1, padding=1),
-            nn.InstanceNorm2d(out_ch),
-            # nn.GroupNorm(num_groups=2, num_channels=out_ch),
+            # nn.InstanceNorm2d(out_ch),
+            nn.GroupNorm(num_groups=out_ch //2, num_channels=out_ch),
             nn.PReLU())
         self.net3 = nn.Sequential(
             nn.ConvTranspose2d(in_ch, 256, kernel_size=3, stride=2, padding=1),
-            nn.InstanceNorm2d(256),
-            # nn.GroupNorm(num_groups=2, num_channels=out_ch),
+            # nn.InstanceNorm2d(256),
+            nn.GroupNorm(num_groups=out_ch // 2, num_channels=256),
             nn.PReLU())
 
     def forward(self, x1, x40, x41, x42):
@@ -49,8 +49,8 @@ class Up(nn.Module):
 
         self.net1 = nn.Sequential(
             nn.ConvTranspose2d(in_ch, out_ch, kernel_size=3, stride=1, padding=1),
-            nn.InstanceNorm2d(out_ch),
-            # nn.GroupNorm(num_groups=2, num_channels=out_ch),
+            # nn.InstanceNorm2d(out_ch),
+            nn.GroupNorm(num_groups=out_ch //2, num_channels=out_ch),
             nn.PReLU())
 
         self.net2 = nn.Sequential(
