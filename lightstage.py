@@ -1,25 +1,13 @@
-# Returns  ip, op, ip_light, op_light, fullimgip
-import os
-import random
-import glob
-from collections import defaultdict
-from numpy import asarray
-import PIL
 import scipy.io
-import torch
-from torch.utils.data import Dataset
-import numpy as np
-from PIL import Image
-from torchvision import transforms
-import torchvision.transforms.functional as TF
-import matplotlib.pyplot as plt
-from skimage.transform import resize
-import re
+from utils.data_augmentation import *
+import scipy.io
+
+from utils.data_augmentation import *
+
 numbers = re.compile(r'(\d+)')
 torch.manual_seed(0)
 np.random.seed(0)
 random.seed(0)
-import cv2
 # im_mul = [1.967532642055168, 2.1676019290963535, 2.747103618770585]
 # albedo_mul = [2.319305570225163, 2.353142937714471, 2.437376604762663]
 RES = 256
@@ -28,41 +16,6 @@ def numericalSort(value):
     parts[1::2] = map(int, parts[1::2])
     return parts
 
-
-def colour_jitter(ip, ip_light, op, op_light):
-    bright_ip = torch.tensor(1.0).uniform_(0.7, 1).item()
-    ip = TF.adjust_brightness(ip, bright_ip)
-    ip_light = TF.adjust_brightness(ip_light, bright_ip)
-
-    bright_op = torch.tensor(1.0).uniform_(0.7, 1).item()
-    op = TF.adjust_brightness(op, bright_op)
-    op_light = TF.adjust_brightness(op_light, bright_op)
-
-    contrast_factor = torch.tensor(1.0).uniform_(0.7, 1).item()
-    ip = TF.adjust_gamma(ip, contrast_factor)
-    ip_light = TF.adjust_gamma(ip_light, contrast_factor)
-
-    contrast_factor = torch.tensor(1.0).uniform_(0.7, 1).item()
-    op = TF.adjust_gamma(op, contrast_factor)
-    op_light = TF.adjust_gamma(op_light, contrast_factor)
-
-    saturation_factor = torch.tensor(1.0).uniform_(0.7, 1).item()
-    ip = TF.adjust_saturation(ip, saturation_factor)
-    ip_light = TF.adjust_saturation(ip_light, saturation_factor)
-
-    saturation_factor = torch.tensor(1.0).uniform_(0.7, 1).item()
-    op = TF.adjust_saturation(op, saturation_factor)
-    op_light = TF.adjust_saturation(op_light, saturation_factor)
-
-    hue_factor = torch.tensor(1.0).uniform_(0, 0.05).item()
-    ip = TF.adjust_hue(ip, hue_factor)
-    ip_light = TF.adjust_hue(ip_light, hue_factor)
-
-    hue_factor = torch.tensor(1.0).uniform_(0, 0.05).item()
-    op = TF.adjust_hue(op, hue_factor)
-    op_light = TF.adjust_hue(op_light, hue_factor)
-
-    return ip, ip_light, op, op_light
 
 def modify_mask(ip):
     ip = np.array(ip)
@@ -81,8 +34,9 @@ def modify(ip):
 
 
 def preprocess(path):
+    # print(path)
     a = Image.open(path)
-    a = np.array(a.resize((RES, RES)))
+    a = a.resize((RES, RES))
     return a
 
 class LightStageFrames(Dataset):
@@ -90,99 +44,82 @@ class LightStageFrames(Dataset):
     def __init__(self, path):
         # Get a list of { (identity+light) : filename }
         self.dataList = defaultdict(list)
-        # for f in sorted(glob.glob(str(path / "*.png")), key=numericalSort):
-        for f in glob.glob(str(path / "*.png")):
-            self.dataList["_".join(f.split("_")[:3])].append(f)
+        for f in sorted(glob.glob(str(path / "*.png")), key = numericalSort):
+            self.dataList["_".join(f.split(".")[:-1])].append(f)
 
         self.dataKeys = list(self.dataList.keys())
-
         self.path = str(path)
         myfile = open('mean_adjustment.txt', "rt")
         self.contents = myfile.read()
         myfile.close()
-        self.transform = transforms.Compose([
-            transforms.Normalize(mean=[0.25412539, 0.23066966, 0.18200988], std=[0.25412539, 0.23066966, 0.18200988])
-        ])
+        self.transform = transforms.Compose([transforms.ToTensor(),
+                                transforms.Normalize(mean=[0.44360004, 0.40193147, 0.31643618],
+                                                     std=[0.32258241, 0.29354254, 0.23349941])
+                                ])
 
     def __len__(self):
         return len(self.dataKeys)
 
 
-    def _processolat(self, img_path, RES):
 
+    def _processlaval(self, img_path, op_path):
         img_id = str(os.path.splitext(os.path.basename(img_path))[0].split("_")[0])
         l = str(os.path.splitext(os.path.basename(img_path))[0].split("_")[-1])
         v = int(os.path.splitext(os.path.basename(img_path))[0].split("_")[1])
-        #print("in process",img_path,l,v)
-        relit_mask = preprocess('mask/' + img_id + '_' + str(v) + '.png')
-        relit_mask = np.tile(relit_mask[:, :, np.newaxis], (1, 1, 3))
 
-        ip = Image.open(img_path)
-        ip = ip.resize((RES, RES))
-        light_path = "lightolat/{}_{}.png".format(str(v), l)
-        ip_light = Image.open(light_path)
-        ip_light = ip_light.resize((32, 16))
-        ip, ip_light, _, _ = colour_jitter(ip, ip_light, ip, ip_light)
-        ip = np.array(ip)
-        ip = cv2.bitwise_and(ip, relit_mask)
-        # plt.imshow(ip);plt.show()
-
-        ip = modify(ip)
-        ip_light = modify(ip_light)
-
-        full = 'Fullview/' + img_id + '_' + str(v).zfill(2) + '.png'
-        fullimgip = preprocess(full)
-        fullimgip = cv2.bitwise_and(fullimgip, relit_mask)
-        fullimgip = modify(fullimgip)
-        return ip, [], ip_light, [], [], fullimgip
-
-    def _processlaval(self, img_path, RES):
-        img_id = str(os.path.splitext(os.path.basename(img_path))[0].split("_")[0])
-        l = str(os.path.splitext(os.path.basename(img_path))[0].split("_")[-1])
-        v = int(os.path.splitext(os.path.basename(img_path))[0].split("_")[1])
-        relit_mask = preprocess('mask/' + img_id + '_' + str(v) + '.png')
-        relit_mask = np.tile(relit_mask[:, :, np.newaxis], (1, 1, 3))
-
-        ip = Image.open(img_path)
-        ip = ip.resize((RES, RES))
+        ip = preprocess(img_path+'.png')
         name = str(img_path.split(".")[0])
         name = str(name.split("/")[1])
+
+        op = preprocess(op_path+'.png')
+        # print('lightmat/' + l + '_' + str(v) + '.mat')
+        # print(img_path, op_path, 'lightmat/' + l + '_' + str(v) + '.mat', 'lightmat/' + op_l + '_' + str(v) + '.mat')
         e = scipy.io.loadmat('lightmat/' + l + '_' + str(v) + '.mat')
         ip_light = self.lightprocess(e, name)
 
-        ip, ip_light, _, _ = colour_jitter(ip, ip_light, ip, ip_light)
+        op_l = str(os.path.splitext(os.path.basename(op_path))[0].split("_")[-1])
+        e_op = scipy.io.loadmat('lightmat/' + op_l + '_' + str(v) + '.mat')
+        op_light = self.lightprocess(e_op, name)
+
+        ip, ip_light, op, op_light = colour_jitter(ip, ip_light, op, op_light)
         ip = np.array(ip)
-        ip = cv2.bitwise_and(ip, relit_mask)
         ip = modify(ip)
         ip_light = modify(ip_light)
+        op = modify(op)
+        op_light = modify(op_light)
+        # print(img_path,op_path,'lightmat/' + l + '_' + str(v) + '.mat','lightmat/' + op_l + '_' + str(v) + '.mat')
 
-        full = 'Fullview/' + img_id +'_'+str(v).zfill(2)+'.png'
-        fullimgip = preprocess(full)
-        fullimgip = cv2.bitwise_and(fullimgip, relit_mask)
-        fullimgip = modify(fullimgip)
-
-        return ip, [], ip_light, [], [], fullimgip
+        return ip, op, ip_light, op_light, [], []
 
     def __getitem__(self, index):
-
-        RES = 256
-        img_path = self.dataList[self.dataKeys[index]]
-        l = str(os.path.splitext(os.path.basename(img_path[0]))[0]).split("_")[-1]
-        if l in ['10', '11', '13', '20', '21', '23', '24', '25', '26', '34', '35', '36', '37', '38', '39', '41',
-                 '48', '49', '50', '53', '55', '56', '57', '61', '62', '63', '64', '65', '66', '67', '68', '69', '70',
-                 '71', '72', '76', '77', '78', '79', '80', '81', '82', '83', '84', '85', '86', '89', '90', '91', '94',
-                 '95', '96', '97', '98', '101', '102', '103', '104', '105', '106', '107', '108', '109', '110', '114',
-                 '115', '116', '117', '118', '119', '120', '121', '122', '123', '125', '126', '127', '128', '129',
-                 '130', '131', '133', '134', '135', '136', '137', '138', '141', '142', '143', '144', '146','147', '149']:
-            img, _, light, _, _, fullimg = self._processolat(img_path[0], RES)
+        if self.path == 'train':
+            divby = 28
         else:
-            img, _, light, _, _, fullimg = self._processlaval(img_path[0], RES)
+            divby = 8
+        img_path = self.dataKeys[index]
+        op_cnd = 1
+        factor = int(index / divby)
+        # print(index, img_path, factor,self.dataKeys[divby * factor], self.dataKeys[divby * (factor + 1) - 1],divby*factor+1, divby*(factor+1)-2)
+        # divby * factor + 1, divby * (factor + 1) - 2
+        target_index = random.randint(divby * factor, divby * (factor + 1) - 1)
+        while op_cnd:
+            if target_index != index:
+                op_cnd = 0
+            else:
+                target_index = random.randint(divby * factor,
+                                              divby * (factor + 1) - 1)
+        # print(target_index)
+        op_path = self.dataKeys[target_index]
+
+        img_ip, img_op, ip_light, op_light, _, _ = self._processlaval(img_path, op_path)
         # img = self.transform(img)
-        return img, [], light, [], fullimg,[]
+        return img_ip, img_op, ip_light, op_light, [],[]
 
     def lightprocess(self, e, name):
+        global ip_light
         regex = r"^\b(?=\w)" + re.escape(name) + ".\d+\S+"
         matches = re.finditer(regex, self.contents, re.MULTILINE)
+
         for matchNum, match in enumerate(matches, start=1):
             line = match.group()
             mean_adjustment = float(line.split("\t")[-1])
@@ -191,4 +128,6 @@ class LightStageFrames(Dataset):
             img = np.clip(255. * img, 0, 255)
             ip_light = resize(img, (16, 32))
             ip_light = Image.fromarray(ip_light.astype('uint8'))
+        if ip_light is None:
+            print(name)
         return ip_light

@@ -1,20 +1,16 @@
 import sys
-from itertools import zip_longest
-from pathlib import Path
 from argparse import ArgumentParser
+from pathlib import Path
 
 sys.path.append('functions')
 sys.path.append('utils')
-from utils.gaussian import *
-from utils.spharm import generate_input_channels
-from lightstage import LightStageFrames
 from torch.utils.data import DataLoader
 from torch.optim.lr_scheduler import MultiStepLR
 from torchvision.utils import save_image
 from utils.metrics import *
-from functions.func import *
 import os
 import pytorch_msssim
+
 m = pytorch_msssim.MSSSIM()
 from functions.func import *
 
@@ -23,17 +19,11 @@ if not os.path.exists('results_face'):
 if not os.path.exists('results_light'):
     os.makedirs('results_light')
 
-
-from torch.autograd import Variable
-import torch.nn as nn
-import torch.functional as F
 import pytorch_lightning as pl
 from lightstage import *
-from PIL import Image
-from torch.nn import functional as F
-from update import HourglassBlock
-from convgru import ConvGRU
+from update import *
 from lighting import lightingNet
+from up import *
 
 # From https://github.com/pytorch/pytorch/issues/15849
 class _RepeatSampler(object):
@@ -43,6 +33,7 @@ class _RepeatSampler(object):
     def __iter__(self):
         while True:
             yield from iter(self.sampler)
+
 
 class FastDataLoader(DataLoader):
     def __init__(self, *args, **kwargs):
@@ -58,7 +49,6 @@ class FastDataLoader(DataLoader):
             yield next(self.iterator)
 
 
-
 class HourglassNet(pl.LightningModule):
 
     def __init__(self, hparams):
@@ -69,93 +59,75 @@ class HourglassNet(pl.LightningModule):
         self.batch_size = hparams.batch_size
         self.log_images = hparams.log_images
         self.weight_decay = hparams.weight_decay
-        self.hid_dim = hparams.hidden_dim  # Hidden dimension GRU
-        self.ip_dim = hparams.ip_dim  # Hidden dimension GRU
         self.num_workers = hparams.num_workers
+        self.bilinear = hparams.bilinear
 
         self.psnrtable = pd.DataFrame()
-        self.blur = GaussianBlur(5)
+        self.layer0 = preconv()
+        self.layer1 = Down(32, 64, Pad = 1, Stride =2)
+        self.layer2 = Down(64, 128, Pad = 1, Stride = 2)
+        self.layer3 = Down(128, 256, Pad = 1, Stride=2)
+        self.layer4 = TripleConv(256, 512)
+        self.lightingNet = lightingNet(512)
+        self.layer5 = TripleUp(1024, 512)
+        self.layer6 = Up(512, 256)
+        self.layer7 = Up(256, 128)
+        self.layer8 = Up(128, 64)
 
-        self.ncLight = 4  #  number of channels for input to lighting network
-        self.baseFilter = 64
-        self.ncPre = self.baseFilter  # number of channels for pre-convolution
+        self.layer9 = nn.Conv2d(64, 3, kernel_size=1)
 
-        self.ncHG4 = self.baseFilter
-        self.ncHG3 = 2 * self.baseFilter
-        self.ncHG2 = 4 * self.baseFilter
-        self.ncHG1 = 8 * self.baseFilter
-        # self.ncHG0 = 16 * self.baseFilter + self.ncLight
-
-        self.pre_conv = nn.Conv2d(3, self.ncPre, kernel_size=5, stride=1, padding=2)
-        self.pre_bn = nn.BatchNorm2d(self.ncPre)
-        #
-        # self.gru = ConvGRU(input_size=self.ncPre, hidden_sizes=[64, self.ncPre],
-        #                    kernel_sizes=[3, 3], n_layers=2)
-
-        self.light = lightingNet(64*8)
-        # self.HG0 = HourglassBlock(self.ncHG1, self.ncHG0, self.light)
-        self.HG1 = HourglassBlock(self.ncHG2, self.ncHG1, self.light)
-        self.HG2 = HourglassBlock(self.ncHG3, self.ncHG2, self.HG1)
-        self.HG3 = HourglassBlock(self.ncHG4, self.ncHG3, self.HG2)
-        self.HG4 = HourglassBlock(self.ncPre, self.ncHG4, self.HG3)
-
-        self.conv_1 = nn.Conv2d(self.ncPre, self.ncPre, kernel_size=3, stride=1, padding=1)
-        self.bn_1 = nn.InstanceNorm2d(self.ncPre)
-        self.conv_2 = nn.Conv2d(self.ncPre, self.ncPre, kernel_size=1, stride=1, padding=0)
-        self.bn_2 = nn.InstanceNorm2d(self.ncPre)#self.bn_2 = nn.BatchNorm2d(self.ncPre)
-        self.conv_3 = nn.Conv2d(self.ncPre, self.ncPre, kernel_size=1, stride=1, padding=0)
-        self.bn_3 = nn.InstanceNorm2d(self.ncPre)#self.bn_3 = nn.BatchNorm2d(self.ncPre)
-
-        self.output = nn.Conv2d(self.ncPre, 3, kernel_size=1, stride=1, padding=0)
+        self.net1 = nn.Sequential(
+            nn.Conv2d(in_channels = 64, out_channels = 3, kernel_size=3, padding=1, stride=1),
+            nn.InstanceNorm2d(3),
+            # nn.GroupNorm(num_groups=2, num_channels=3),
+            nn.Sigmoid(),
+        )
         self.save_hyperparameters()
 
+    def forward(self, x, target_light):
 
-        # inputs = np.concatenate((np.ones((1, 1, 16, 32)), generate_input_channels(harmonics=3)[np.newaxis, ...]),
-        #                         axis=1)
-        # self.register_buffer("light_inputs", torch.from_numpy(inputs).float())
+        x0 = self.layer0(x)
+        x10, x11 = self.layer1(x0)
+        x20, x21 = self.layer2(x11)
+        x30, x31 = self.layer3(x21)
+        x40, x41, x42 = self.layer4(x31)
+        x5, light_estim = self.lightingNet(x42, target_light)
 
-
-    def forward(self, x):
-        skip_count=0
-        feat = self.pre_conv(x)
-        feat_ip = F.relu(self.pre_bn(feat))
-        feat, light_estim = self.HG4(feat_ip,0,skip_count)
-        # gru_features = self.gru(feat, input_state)
-        # print("4. Albedo Net full out", feat.shape, full_face.shape)
-        # feat = F.relu(self.bn_1(self.conv_1(gru_features[-1])))
-        feat = feat*feat_ip
-        feat = F.relu(self.bn_1(self.conv_1(feat)))
-        feat = F.relu(self.bn_2(self.conv_2(feat)))
-        feat = F.relu(self.bn_3(self.conv_3(feat)))
-        out_img = self.output(feat)
-        albedo_estim = torch.sigmoid(out_img)
-        return albedo_estim, light_estim
-
+        x6 = self.layer5(x5, x40, x41, x42)
+        x6 = self.layer6(x6, x30, x31)
+        x6 = self.layer7(x6, x20, x21)
+        x6 = self.layer8(x6, x10, x11)
+        x6 = torch.cat([x0, x6], dim=1)
+        face_estim = self.net1(x6)
+        return face_estim, light_estim
 
     def training_step(self, batch, batch_nb):
-        self.trainer.optimizers[0].param_groups[-1]['lr'] = 2e-5
-        input_, _, light_input, _, albedo_gt, _ = batch
-        face_estim, light_estim = self.forward(input_)
-        sz = albedo_gt.size(2) ** 2
+        # self.trainer.optimizers[0].param_groups[-1]['lr'] = 2e-5
+        input_, output_face, light_input, light_output, [], [] = batch
+        face_estim, light_estim = self.forward(input_, light_output)
 
-        l1_face = 6 / sz * torch.sum(torch.abs(face_estim - albedo_gt)) / face_estim.shape[0]
+        sz = output_face.size(2) ** 2
+        l1_face = 6 / sz * torch.sum(torch.abs(face_estim - output_face)) / face_estim.shape[0]
         l1_light = 4 / (16 * 32) * torch.sum(torch.abs(light_estim - light_input)) / face_estim.shape[0]
-        l_msssim = (1 - m(albedo_gt, face_estim))*1000
-        # l_light_msssim = (1 - m(light_input, light_estim))*5000
+        l_msssim = (1 - m(output_face, face_estim)) * 1000
 
-        loss = l1_face + l1_light +l_msssim
+        loss = l1_face + l1_light + l_msssim
         lr_saved = self.trainer.optimizers[0].param_groups[-1]['lr']
-        lr_saved = torch.scalar_tensor(lr_saved).to(self.HG4.device)
+        lr_saved = torch.scalar_tensor(lr_saved).to(self.lightingNet.device)
 
         if self.log_images:
             if self.global_step % 10 == 0:
                 light_estim = F.interpolate(light_estim, (128, 256), mode="bilinear")
                 light_input = F.interpolate(light_input, (128, 256), mode="bilinear")
-                albedo_diff = 3 * torch.abs(face_estim[0:1, ...] - albedo_gt[0:1, ...])
-                img_stack = torch.clamp(torch.cat((face_estim[0:1, ...], albedo_diff, albedo_gt[0:1, ...], input_[0:1, ...])), min=0,
-                                        max=1)
-                albedo_grid = make_grid_with_lightlabels(img_stack.detach().cpu(), ["Output", "Diff (3x)", "Target" , "Input"],
-                                                    nrow=4)
+                light_output = F.interpolate(light_input, (128, 256), mode="bilinear")
+
+                albedo_diff = 3 * torch.abs(face_estim[0:1, ...] - output_face[0:1, ...])
+                img_stack = torch.clamp(
+                    torch.cat((face_estim[0:1, ...], albedo_diff, output_face[0:1, ...], input_[0:1, ...])), min=0,
+                    max=1)
+                albedo_grid = make_grid_with_lightlabels(img_stack.detach().cpu(),
+                                                         ["Output", "Diff (3x)", "Target", "Input"],
+                                                         nrow=4)
                 save_image(albedo_grid,
                            'results_face/epoch_{}_step_{}_face_images.png'.format(self.current_epoch,
                                                                                   self.global_step))
@@ -168,7 +140,7 @@ class HourglassNet(pl.LightningModule):
 
                 save_image(light_grid,
                            'results_light/epoch_{}_step_{}_light_images.png'.format(self.current_epoch,
-                                                                                       self.global_step))
+                                                                                    self.global_step))
 
                 plt.close()
         if self.hparams.log_graph == 1:
@@ -182,7 +154,6 @@ class HourglassNet(pl.LightningModule):
         if self.hparams.log_histogram == 1:
             self.custom_histogram_adder()
 
-
         self.log('l1_face', l1_face, prog_bar=True)
         self.log('l1_light', l1_light, prog_bar=True)
         self.log('l_msssim', l_msssim, prog_bar=True)
@@ -191,28 +162,24 @@ class HourglassNet(pl.LightningModule):
         self.log('train_loss', loss)
         return loss
 
-
     def validation_step(self, batch, batch_nb):
         print("Validation")
-        input_, _, light_input, _, albedo_gt, _ = batch
-        gru_state = None
+        input_, output_face, light_input, light_output, [], [] = batch
 
-        face_estim, light_estim = self.forward(input_)
+        face_estim, light_estim = self.forward(input_, light_output)
 
         face_estim = torch.clamp(face_estim, min=0, max=1)
         light_estim = torch.clamp(light_estim, min=0, max=1)
 
         # Calculate loss
-        sz = albedo_gt.size(2) ** 2
-        l1_face = 6 / sz * torch.sum(torch.abs(face_estim - albedo_gt) ) / face_estim.shape[0]
+        sz = output_face.size(2) ** 2
+        l1_face = 6 / sz * torch.sum(torch.abs(face_estim - output_face)) / face_estim.shape[0]
         l1_light = 4 / (16 * 32) * torch.sum(torch.abs(light_estim - light_input)) / face_estim.shape[0]
-        l_msssim = (1 - m(albedo_gt, face_estim)) * 1000
-        # print(light_estim.size(),light_input.size())
-        # l_light_msssim = (1 - m(light_input, light_estim)) * 5000
+        l_msssim = (1 - m(output_face, face_estim)) * 1000
 
-        loss = l1_face + l1_light  +l_msssim
+        loss = l1_face + l1_light + l_msssim
 
-        psnr_ = psnr(image_pred=face_estim, image_gt=albedo_gt)/face_estim.shape[0]
+        psnr_ = psnr(image_pred=face_estim, image_gt=output_face) / face_estim.shape[0]
 
         self.log('val_loss', loss)
         self.log('val_loss', loss, prog_bar=True)
@@ -234,7 +201,7 @@ class HourglassNet(pl.LightningModule):
         avg_psnr = np.nanmean(np.array(list(zip_longest(*psnr)), dtype=float), axis=1)
         avg_psnr = avg_psnr.reshape(1, len(avg_psnr))
         avg_psnr = pd.DataFrame(avg_psnr)
-        filename = self.logger.root_dir + '/version_' + str(self.logger.version-1 ) + '/' + tag + '.csv'
+        filename = self.logger.root_dir + '/version_' + str(self.logger.version - 1) + '/' + tag + '.csv'
         avg_psnr.to_csv(filename, mode='a', sep=' ', header=False, )
 
     def custom_histogram_adder(self):
@@ -250,11 +217,12 @@ class HourglassNet(pl.LightningModule):
         return [optimizer], [scheduler]
 
     def __dataloader(self):
-        dataset_train = LightStageFrames(Path("train_f/"))
-        dataset_val = LightStageFrames(Path("val_f/"))
-        train_loader = FastDataLoader(dataset_train, batch_size=self.batch_size, num_workers=self.num_workers, pin_memory=True, shuffle=True)
+        dataset_train = LightStageFrames(Path("train/"))
+        dataset_val = LightStageFrames(Path("val/"))
+        train_loader = FastDataLoader(dataset_train, batch_size=self.batch_size, num_workers=self.num_workers,
+                                      pin_memory=True, shuffle=True)
         val_loader = DataLoader(dataset_val, batch_size=self.batch_size, pin_memory=True, shuffle=False)
-        return {'train': train_loader,'val':val_loader}
+        return {'train': train_loader, 'val': val_loader}
 
     # @pl.data_loader
     def train_dataloader(self):
@@ -274,17 +242,14 @@ class HourglassNet(pl.LightningModule):
                             help='Log computational graph on tensorboard')
         parser.add_argument('--log_histogram', default=0, type=int,
                             help='Log histogram for weights and bias')
-        parser.add_argument('--batch_size', default=20, type=int)
-        parser.add_argument('--learning_rate', default=2e-5, type=float)
+        parser.add_argument('--batch_size', default=4, type=int)
+        parser.add_argument('--learning_rate', default=1e-5, type=float)
         parser.add_argument('--momentum', default=0.9, type=float,
                             help='SGD momentum (default: 0.9)')
         parser.add_argument('--weight_decay', '--wd', default=1e-6, type=float,
-                             help='weight decay (default: 1e-4)')
-        parser.add_argument('--hidden_dim', type=int, default=3,
-                            help='number of hidden dim for ConvLSTM layers')
-        parser.add_argument('--ip_dim', type=int, default=3,
-                            help='number of input dim for ConvLSTM layers')
+                            help='weight decay (default: 1e-4)')
+        parser.add_argument('--bilinear', default=0, type=int,
+                            help='upsampling')
         parser.add_argument('--num_workers', default=24, type=int)
 
         return parser
-

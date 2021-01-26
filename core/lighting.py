@@ -24,13 +24,22 @@ class lightingNet(pl.LightningModule):
     def __init__(self, ncInput):
         super(lightingNet, self).__init__()
         self.ncInput = ncInput
+        self.net1 = nn.Sequential(
+            nn.Conv2d(512, 512, kernel_size=3, padding=1),
+            nn.GroupNorm(num_groups=2, num_channels=512),
+            nn.PReLU())
         self.block1 = nn.Sequential(nn.Conv2d(self.ncInput,1536, kernel_size=(1,1)),nn.PReLU())
         self.block2 = nn.Sequential(nn.Conv2d(self.ncInput, 512, kernel_size=(1,1)), nn.PReLU())
-        self.prelu = nn.PReLU()
+        self.net2 = nn.Sequential(
+            nn.Conv2d(1536, 512, kernel_size=1),
+            nn.GroupNorm(num_groups=2, num_channels=512),
+            nn.InstanceNorm2d(512),
+            nn.PReLU())
 
 
-    def forward(self, innerFeat, skip, count):
-        innerFeatold = innerFeat.clone() #innerfeat size [batch_size, 128, 16,16]
+    def forward(self, innerFeat, targetLight):
+        innerFeatold = innerFeat.clone() #innerfeat size [batch_size, 512, 16,16]
+        innerFeat = self.net1(innerFeat)
         ip1 = innerFeat.clone()
         ip2 = innerFeat.clone()
         batch_size,ch,h,w = innerFeatold.shape
@@ -49,5 +58,9 @@ class lightingNet(pl.LightningModule):
         rgb = rgb.reshape([batch_size,16,32,3, 16 * 16])
         lightmap = torch.sum(rgb*confidence, dim = -1)/torch.sum(confidence)
         lightmap = lightmap.reshape([batch_size,3,16,32])
-        lightmap =self.prelu(lightmap)
-        return innerFeatold, lightmap
+
+        t1 = targetLight.reshape([batch_size,1536,1,1])
+        t2 = t1.repeat_interleave(repeats=16, dim=2)
+        t2 = t2.repeat_interleave(repeats=16, dim=3)
+        t3 = self.net2(t2)
+        return t3, lightmap
