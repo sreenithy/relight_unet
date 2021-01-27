@@ -25,6 +25,7 @@ from update import *
 from lighting import lightingNet
 from up import *
 
+
 # From https://github.com/pytorch/pytorch/issues/15849
 class _RepeatSampler(object):
     def __init__(self, sampler):
@@ -64,9 +65,9 @@ class HourglassNet(pl.LightningModule):
 
         self.psnrtable = pd.DataFrame()
         self.layer0 = preconv()
-        self.layer1 = Down(32, 64, Pad = 1, Stride =2)
-        self.layer2 = Down(64, 128, Pad = 1, Stride = 2)
-        self.layer3 = Down(128, 256, Pad = 1, Stride=2)
+        self.layer1 = Down(32, 64, Pad=1, Stride=2)
+        self.layer2 = Down(64, 128, Pad=1, Stride=2)
+        self.layer3 = Down(128, 256, Pad=1, Stride=2)
         self.layer4 = TripleConv(256, 512)
         self.lightingNet = lightingNet(512)
         self.layer5 = TripleUp(1024, 512)
@@ -74,7 +75,7 @@ class HourglassNet(pl.LightningModule):
         self.layer7 = Up(256, 128)
         self.layer8 = Up(128, 64)
 
-        self.layer9 = nn.Conv2d(in_channels = 64, out_channels = 3, kernel_size=3, padding=1, stride=1)
+        self.layer9 = nn.Conv2d(in_channels=64, out_channels=3, kernel_size=3, padding=1, stride=1)
 
         self.save_hyperparameters()
 
@@ -114,29 +115,39 @@ class HourglassNet(pl.LightningModule):
             if self.global_step % 10 == 0:
                 light_estim = F.interpolate(light_estim, (128, 256), mode="bilinear")
                 light_input = F.interpolate(light_input, (128, 256), mode="bilinear")
-                light_output = F.interpolate(light_input, (128, 256), mode="bilinear")
-                light_output = F.pad(light_output, [0 // 2, 0 - 0 // 2, 128 // 2, 128 - 128 // 2])
+                light_output = F.interpolate(light_output, (128, 256), mode="bilinear")
+                light_diff = 3 * torch.abs(light_estim[0:1, ...] - light_input[0:1, ...])
+                light_diff = F.interpolate(light_diff, (128, 256), mode="bilinear")
 
-                albedo_diff = 3 * torch.abs(face_estim[0:1, ...] - output_face[0:1, ...])
+                # light_diff = F.pad(light_diff, [0 // 2, 0 - 0 // 2, 128 // 2, 128 - 128 // 2])
+                light_output = F.pad(light_output, [0 // 2, 0 - 0 // 2, 128 // 2, 128 - 128 // 2])
+                light_ip256 = F.pad(light_input, [0 // 2, 0 - 0 // 2, 128 // 2, 128 - 128 // 2])
+                light_estim256 = F.pad(light_estim, [0 // 2, 0 - 0 // 2, 128 // 2, 128 - 128 // 2])
+                light_diff256 = F.pad(light_diff, [0 // 2, 0 - 0 // 2, 128 // 2, 128 - 128 // 2])
+
+                face_diff = 3 * torch.abs(face_estim[0:1, ...] - output_face[0:1, ...])
+
                 img_stack = torch.clamp(
-                    torch.cat((face_estim[0:1, ...], albedo_diff, output_face[0:1, ...], light_output[0:1, ...], input_[0:1, ...])), min=0,
-                    max=1)
+                    torch.cat((input_[0:1, ...], output_face[0:1, ...], face_diff, face_estim[0:1, ...],
+                               light_ip256[0:1, ...], light_output[0:1, ...], light_diff256, light_estim256[0:1, ...]
+                               )), min=0, max=1)
                 albedo_grid = make_grid_with_lightlabels(img_stack.detach().cpu(),
-                                                         ["Output", "Diff (3x)", "Target", "Target Light", "Input"],
+                                                         ["Input", "Output", "Diff (3x)", "Output estim",
+                                                          "Input Light", "Output Light", "Diff (3x)", " Input Estim"],
                                                          nrow=4)
                 save_image(albedo_grid,
                            'results_face/epoch_{}_step_{}_face_images.png'.format(self.current_epoch,
                                                                                   self.global_step))
 
-                light_diff = 3 * torch.abs(light_estim[0:1, ...] - light_input[0:1, ...])
-                img_stack = torch.clamp(torch.cat((light_estim[0:1, ...], light_diff, light_input[0:1, ...])),
-                                        min=0, max=1)
-                light_grid = make_grid_with_lightlabels(img_stack.detach().cpu(), ["Output", "Diff (3x)", "Target"],
-                                                        nrow=3)
-
-                save_image(light_grid,
-                           'results_light/epoch_{}_step_{}_light_images.png'.format(self.current_epoch,
-                                                                                    self.global_step))
+                # light_diff = 3 * torch.abs(light_estim[0:1, ...] - light_input[0:1, ...])
+                # img_stack = torch.clamp(torch.cat((light_estim[0:1, ...], light_diff, light_input[0:1, ...])),
+                #                         min=0, max=1)
+                # light_grid = make_grid_with_lightlabels(img_stack.detach().cpu(), ["Output", "Diff (3x)", "Target"],
+                #                                         nrow=3)
+                #
+                # save_image(light_grid,
+                #            'results_light/epoch_{}_step_{}_light_images.png'.format(self.current_epoch,
+                #                                                                     self.global_step))
 
                 plt.close()
         if self.hparams.log_graph == 1:

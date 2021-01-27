@@ -24,7 +24,7 @@ def main(hparams):
                          profiler=False,
                          distributed_backend=hparams.distributed_backend,
                          logger=logger,replace_sampler_ddp=False)
-    # ,
+
     # ------------------------
     # 3 FIND LR
     # ------------------------
