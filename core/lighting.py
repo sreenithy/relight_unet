@@ -39,11 +39,14 @@ class lightingNet(pl.LightningModule):
 
 
     def forward(self, innerFeat, targetLight):
-        innerFeatold = innerFeat.clone() #innerfeat size [batch_size, 512, 16,16]
+        batch_size, ch, h, w = innerFeat.shape
+        # innerFeatold = innerFeat.clone() #innerfeat size [batch_size, 512, 16,16]
+
         innerFeat = self.net1(innerFeat)
+        h = innerFeat.register_hook(lambda grad: print(grad))
         ip1 = innerFeat.clone()
         ip2 = innerFeat.clone()
-        batch_size,ch,h,w = innerFeatold.shape
+
         ip1 = self.block1(ip1)
         ip2 = self.block2(ip2)
         ip1 = ip1.unsqueeze(2)
@@ -64,4 +67,5 @@ class lightingNet(pl.LightningModule):
         t2 = t1.repeat_interleave(repeats=16, dim=2)
         t2 = t2.repeat_interleave(repeats=16, dim=3)
         t3 = self.net2(t2)
+
         return t3, lightmap

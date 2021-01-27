@@ -109,9 +109,9 @@ class HourglassNet(pl.LightningModule):
         sz = output_face.size(2) ** 2
         l1_face = 6 / sz * torch.sum(torch.abs(face_estim - output_face)) / face_estim.shape[0]
         l1_light = 4 / (16 * 32) * torch.sum(torch.abs(light_estim - light_input)) / face_estim.shape[0]
-        l_msssim = (1 - m(output_face, face_estim)) * 1000
+        # l_msssim = (1 - m(output_face, face_estim)) * 1000
 
-        loss = l1_face + l1_light + l_msssim
+        loss = l1_face + l1_light
         lr_saved = self.trainer.optimizers[0].param_groups[-1]['lr']
         lr_saved = torch.scalar_tensor(lr_saved).to(self.lightingNet.device)
 
@@ -156,7 +156,7 @@ class HourglassNet(pl.LightningModule):
 
         self.log('l1_face', l1_face, prog_bar=True)
         self.log('l1_light', l1_light, prog_bar=True)
-        self.log('l_msssim', l_msssim, prog_bar=True)
+        # self.log('l_msssim', l_msssim, prog_bar=True)
         # self.log('light_msssim', l_light_msssim, prog_bar=True)
         self.log('learning_rate', lr_saved, prog_bar=True)
         self.log('train_loss', loss)
@@ -175,9 +175,9 @@ class HourglassNet(pl.LightningModule):
         sz = output_face.size(2) ** 2
         l1_face = 6 / sz * torch.sum(torch.abs(face_estim - output_face)) / face_estim.shape[0]
         l1_light = 4 / (16 * 32) * torch.sum(torch.abs(light_estim - light_input)) / face_estim.shape[0]
-        l_msssim = (1 - m(output_face, face_estim)) * 1000
+        # l_msssim = (1 - m(output_face, face_estim)) * 1000
 
-        loss = l1_face + l1_light + l_msssim
+        loss = l1_face + l1_light
 
         psnr_ = psnr(image_pred=face_estim, image_gt=output_face) / face_estim.shape[0]
 
@@ -242,7 +242,7 @@ class HourglassNet(pl.LightningModule):
                             help='Log computational graph on tensorboard')
         parser.add_argument('--log_histogram', default=0, type=int,
                             help='Log histogram for weights and bias')
-        parser.add_argument('--batch_size', default=32, type=int)
+        parser.add_argument('--batch_size', default=2, type=int)
         parser.add_argument('--learning_rate', default=1e-5, type=float)
         parser.add_argument('--momentum', default=0.9, type=float,
                             help='SGD momentum (default: 0.9)')
