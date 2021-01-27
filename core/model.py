@@ -74,14 +74,8 @@ class HourglassNet(pl.LightningModule):
         self.layer7 = Up(256, 128)
         self.layer8 = Up(128, 64)
 
-        self.layer9 = nn.Conv2d(64, 3, kernel_size=1)
+        self.layer9 = nn.Conv2d(in_channels = 64, out_channels = 3, kernel_size=3, padding=1, stride=1)
 
-        self.net1 = nn.Sequential(
-            nn.Conv2d(in_channels = 64, out_channels = 3, kernel_size=3, padding=1, stride=1),
-            nn.InstanceNorm2d(3),
-            # nn.GroupNorm(num_groups=2, num_channels=3),
-            nn.Sigmoid(),
-        )
         self.save_hyperparameters()
 
     def forward(self, x, target_light):
@@ -98,7 +92,8 @@ class HourglassNet(pl.LightningModule):
         x6 = self.layer7(x6, x20, x21)
         x6 = self.layer8(x6, x10, x11)
         x6 = torch.cat([x0, x6], dim=1)
-        face_estim = self.net1(x6)
+        face_estim = self.layer9(x6)
+        face_estim = torch.sigmoid(face_estim)
         return face_estim, light_estim
 
     def training_step(self, batch, batch_nb):
@@ -120,13 +115,14 @@ class HourglassNet(pl.LightningModule):
                 light_estim = F.interpolate(light_estim, (128, 256), mode="bilinear")
                 light_input = F.interpolate(light_input, (128, 256), mode="bilinear")
                 light_output = F.interpolate(light_input, (128, 256), mode="bilinear")
+                light_output = F.pad(light_output, [0 // 2, 0 - 0 // 2, 128 // 2, 128 - 128 // 2])
 
                 albedo_diff = 3 * torch.abs(face_estim[0:1, ...] - output_face[0:1, ...])
                 img_stack = torch.clamp(
-                    torch.cat((face_estim[0:1, ...], albedo_diff, output_face[0:1, ...], input_[0:1, ...])), min=0,
+                    torch.cat((face_estim[0:1, ...], albedo_diff, output_face[0:1, ...], light_output[0:1, ...], input_[0:1, ...])), min=0,
                     max=1)
                 albedo_grid = make_grid_with_lightlabels(img_stack.detach().cpu(),
-                                                         ["Output", "Diff (3x)", "Target", "Input"],
+                                                         ["Output", "Diff (3x)", "Target", "Target Light", "Input"],
                                                          nrow=4)
                 save_image(albedo_grid,
                            'results_face/epoch_{}_step_{}_face_images.png'.format(self.current_epoch,
@@ -243,7 +239,7 @@ class HourglassNet(pl.LightningModule):
         parser.add_argument('--log_histogram', default=0, type=int,
                             help='Log histogram for weights and bias')
         parser.add_argument('--batch_size', default=2, type=int)
-        parser.add_argument('--learning_rate', default=1e-5, type=float)
+        parser.add_argument('--learning_rate', default=1e-2, type=float)
         parser.add_argument('--momentum', default=0.9, type=float,
                             help='SGD momentum (default: 0.9)')
         parser.add_argument('--weight_decay', '--wd', default=1e-6, type=float,

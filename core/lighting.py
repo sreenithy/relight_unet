@@ -26,24 +26,25 @@ class lightingNet(pl.LightningModule):
         self.ncInput = ncInput
         self.net1 = nn.Sequential(
             nn.Conv2d(512, 512, kernel_size=3, padding=1),
-            nn.GroupNorm(num_groups=256, num_channels=512),
-            # nn.InstanceNorm2d(512),
+            # nn.GroupNorm(num_groups=256, num_channels=512),
+            nn.InstanceNorm2d(512),
             nn.PReLU())
-        self.block1 = nn.Sequential(nn.Conv2d(self.ncInput,1536, kernel_size=(1,1)),nn.PReLU())
-        self.block2 = nn.Sequential(nn.Conv2d(self.ncInput, 512, kernel_size=(1,1)), nn.PReLU())
+        self.block1 = nn.Sequential(nn.Conv2d(self.ncInput,1536, kernel_size=(1,1)),   nn.InstanceNorm2d(1535),nn.PReLU())
+        self.block2 = nn.Sequential(nn.Conv2d(self.ncInput, 512, kernel_size=(1,1)),   nn.InstanceNorm2d(512), nn.PReLU())
         self.net2 = nn.Sequential(
+            nn.PReLU(),
             nn.Conv2d(1536, 512, kernel_size=1),
-            nn.GroupNorm(num_groups=256, num_channels=512),
-            # nn.InstanceNorm2d(512),
+            # nn.GroupNorm(num_groups=256, num_channels=512),
+            nn.InstanceNorm2d(512),
             nn.PReLU())
 
 
     def forward(self, innerFeat, targetLight):
         batch_size, ch, h, w = innerFeat.shape
         # innerFeatold = innerFeat.clone() #innerfeat size [batch_size, 512, 16,16]
-
+        # h = innerFeat.register_hook(lambda grad: print(grad))
         innerFeat = self.net1(innerFeat)
-        h = innerFeat.register_hook(lambda grad: print(grad))
+
         ip1 = innerFeat.clone()
         ip2 = innerFeat.clone()
 

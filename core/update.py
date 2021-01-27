@@ -54,17 +54,17 @@ class TripleConv(nn.Module):
         super().__init__()
         self.net1 = nn.Sequential(
             nn.Conv2d(in_ch, out_ch, kernel_size=3, padding=1, stride=2),
-            # nn.InstanceNorm2d(out_ch),
-            nn.GroupNorm(num_groups=out_ch //2, num_channels=out_ch),
+            nn.InstanceNorm2d(out_ch),
+            # nn.GroupNorm(num_groups=out_ch //2, num_channels=out_ch),
             nn.PReLU())
         self.net2 = nn.Sequential(nn.Conv2d(out_ch, out_ch, kernel_size=3, padding =1, stride=1),
-                                  # nn.InstanceNorm2d(out_ch),
-                                  nn.GroupNorm(num_groups=out_ch //2, num_channels=out_ch),
+                                  nn.InstanceNorm2d(out_ch),
+                                  # nn.GroupNorm(num_groups=out_ch //2, num_channels=out_ch),
                                   nn.PReLU(),
                                   )
         self.net3 = nn.Sequential(nn.Conv2d(out_ch, out_ch, kernel_size=3, padding = 1, stride=1),
-                                  # nn.InstanceNorm2d(out_ch),
-                                  nn.GroupNorm(num_groups=out_ch //2, num_channels=out_ch),
+                                  nn.InstanceNorm2d(out_ch),
+                                  # nn.GroupNorm(num_groups=out_ch //2, num_channels=out_ch),
                                   nn.PReLU(),
                                   )
 
