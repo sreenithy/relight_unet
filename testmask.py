@@ -22,6 +22,7 @@ np.random.seed(0)
 random.seed(0)
 RES = 256
 from torchvision.utils import save_image
+
 for img_path in glob.glob('s2/*.png'):
 
     img_id = str(os.path.splitext(os.path.basename(img_path))[0].split("_")[0])

@@ -12,14 +12,15 @@ class preconv(nn.Module):
             nn.Conv2d(in_ch, out_ch, kernel_size=7, padding = 3, stride =1 ),
             nn.InstanceNorm2d(out_ch),
             # nn.GroupNorm(num_groups=2, num_channels=out_ch),
-            nn.PReLU(),
         )
+        self.relu = nn.PReLU()
 
 
     def forward(self, x):
         ip = x.clone()
         feat = self.net1(x)
         y1 = torch.cat([ip, feat], dim=1)
+        y1 = self.relu(y1)
         return y1
 
 

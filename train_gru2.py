@@ -53,6 +53,7 @@ def main(hparams):
     # find the batch size
 
     trainer.fit(net)
+
     #net.to('cuda')
     #summary(net, [(3, 256, 256), (3,16,32)])
 

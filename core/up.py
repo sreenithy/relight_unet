@@ -12,11 +12,10 @@ class TripleUp(nn.Module):
 
     def __init__(self, in_ch, out_ch):
         super().__init__()
-
         # self.upsample = nn.ConvTranspose2d(in_ch, in_ch // 2, kernel_size=2, stride=2)
 
         self.net1 = nn.Sequential(
-            nn.ConvTranspose2d(in_ch, in_ch // 2, kernel_size=3, stride=1, padding=1),
+            nn.ConvTranspose2d(768, in_ch // 2, kernel_size=3, stride=1, padding=1),
             nn.InstanceNorm2d(out_ch),
             # nn.GroupNorm(num_groups=out_ch //2, num_channels=out_ch),
             nn.PReLU())

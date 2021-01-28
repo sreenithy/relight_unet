@@ -39,14 +39,22 @@ class LightStageFrames(Dataset):
         ip = preprocess(img_path + '.png')
         name = str(img_path.split(".")[0])
         name = str(name.split("/")[1])
-
         op = preprocess(op_path + '.png')
-        e = scipy.io.loadmat('lightmat/' + l + '_' + str(v) + '.mat')
-        ip_light = self.lightprocess(e, name)
+
+        # e = scipy.io.loadmat('lightmat/' + l + '_' + str(v) + '.mat')
+        # ip_light = self.lightprocess(e, name)
+        # op_l = str(os.path.splitext(os.path.basename(op_path))[0].split("_")[-1])
+        # e_op = scipy.io.loadmat('lightmat/' + op_l + '_' + str(v) + '.mat')
+        # op_light = self.lightprocess(e_op, name)
 
         op_l = str(os.path.splitext(os.path.basename(op_path))[0].split("_")[-1])
-        e_op = scipy.io.loadmat('lightmat/' + op_l + '_' + str(v) + '.mat')
-        op_light = self.lightprocess(e_op, name)
+        # #
+        # ip_light = Image.open('gtlg/'+ l + '_' + str(v) +'.png')
+        # op_light = Image.open('gtlg/'+ op_l + '_' + str(v) + '.png')
+
+        ip_light = Image.open('s080laval/' + img_id+'_' + str(v) +'_'+l +  '.png')
+        op_light = Image.open('s080laval/'+ img_id+'_' + str(v) +'_'+ op_l  + '.png')
+
 
         ip, ip_light, op, op_light = colour_jitter(ip, ip_light, op, op_light)
         ip = np.array(ip)
@@ -62,7 +70,7 @@ class LightStageFrames(Dataset):
         if self.path == 'train_s':
             divby = 28
         else:
-            divby = 8
+            divby = 6
         img_path = self.dataKeys[index]
         op_cnd = 1
         factor = int(index / divby)

@@ -29,10 +29,10 @@ def lightprocess(e, name):
     img = np.clip(255. * img, 0, 255)
     ip_light = resize(img, (16, 32))
     ip_light = ip_light.astype('uint8')
-    imsave('t/'+ name +'.png', ip_light)
+    imsave('gtlg/'+ name +'.png', ip_light)
 
 
-for img_path in sorted(glob.glob('t/*.mat'), key=numericalSort):
+for img_path in sorted(glob.glob('lightmat/*.mat'), key=numericalSort):
     e = scipy.io.loadmat(img_path)
     name = str(img_path.split(".")[0])
     name = str(name.split("/")[1])
