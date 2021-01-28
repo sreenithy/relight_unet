@@ -1,7 +1,7 @@
 import sys
 from argparse import ArgumentParser
 from pathlib import Path
-
+from torch.autograd import Variable
 sys.path.append('functions')
 sys.path.append('utils')
 from torch.utils.data import DataLoader
@@ -16,8 +16,6 @@ from functions.func import *
 
 if not os.path.exists('results_face'):
     os.makedirs('results_face')
-if not os.path.exists('results_light'):
-    os.makedirs('results_light')
 
 import pytorch_lightning as pl
 from lightstage import *
@@ -25,7 +23,7 @@ from update import *
 from lighting import lightingNet
 from up import *
 
-
+from envmap import EnvironmentMap
 # From https://github.com/pytorch/pytorch/issues/15849
 class _RepeatSampler(object):
     def __init__(self, sampler):
@@ -50,10 +48,10 @@ class FastDataLoader(DataLoader):
             yield next(self.iterator)
 
 
-class HourglassNet(pl.LightningModule):
+class RelightNetwork(pl.LightningModule):
 
     def __init__(self, hparams):
-        super(HourglassNet, self).__init__()
+        super(RelightNetwork, self).__init__()
         # self.hparams = hparams
         self.hparams = hparams
         self.lr = hparams.learning_rate
@@ -76,7 +74,7 @@ class HourglassNet(pl.LightningModule):
         self.layer8 = Up(128, 64)
 
         self.layer9 = nn.Conv2d(in_channels=64, out_channels=3, kernel_size=3, padding=1, stride=1)
-
+        self.sa = EnvironmentMap(16, 'LatLong').solidAngles()
         self.save_hyperparameters()
 
     def forward(self, x, target_light):
@@ -99,15 +97,16 @@ class HourglassNet(pl.LightningModule):
 
     def training_step(self, batch, batch_nb):
         # self.trainer.optimizers[0].param_groups[-1]['lr'] = 2e-5
-        input_, output_face, light_input, light_output, [], [] = batch
+        input_, output_face, light_input, light_output, ip,op = batch
         face_estim, light_estim = self.forward(input_, light_output)
-
+        weights = Variable(torch.from_numpy(self.sa), requires_grad=False).float().to(self.lightingNet.device)
         sz = output_face.size(2) ** 2
-        l1_face = 6 / sz * torch.sum(torch.abs(face_estim - output_face)) / face_estim.shape[0]
-        l1_light = 4 / (16 * 32) * torch.sum(torch.abs(light_estim - light_input)) / face_estim.shape[0]
+        l1_face =1/sz*torch.sum(torch.abs(face_estim - output_face)) / face_estim.shape[0]
+        wl1 = torch.sum(weights * torch.abs(torch.log(1+light_estim) - torch.log(1+light_input)))**2 / face_estim.shape[0]
+
         # l_msssim = (1 - m(output_face, face_estim)) * 1000
 
-        loss = l1_face + l1_light
+        loss = l1_face + 0.8* wl1
         lr_saved = self.trainer.optimizers[0].param_groups[-1]['lr']
         lr_saved = torch.scalar_tensor(lr_saved).to(self.lightingNet.device)
 
@@ -133,7 +132,7 @@ class HourglassNet(pl.LightningModule):
                                )), min=0, max=1)
                 albedo_grid = make_grid_with_lightlabels(img_stack.detach().cpu(),
                                                          ["Input", "Output", "Diff (3x)", "Output estim",
-                                                          "Input Light", "Output Light", "Diff (3x)", " Input Estim"],
+                                                         ip, op, "Diff (3x)", " Input Estim"],
                                                          nrow=4)
                 save_image(albedo_grid,
                            'results_face/epoch_{}_step_{}_face_images.png'.format(self.current_epoch,
@@ -155,36 +154,34 @@ class HourglassNet(pl.LightningModule):
             if self.global_step == 1:
                 example_input_array = list()
                 example_input_array.append(torch.rand((1, 3, 256, 256)))
-                self.logger.experiment.add_graph(HourglassNet(self.hparams), example_input_array)
+                self.logger.experiment.add_graph(RelightNetwork(self.hparams), example_input_array)
                 print("Logged computational Graph")
 
         if self.hparams.log_histogram == 1:
             self.custom_histogram_adder()
 
         self.log('l1_face', l1_face, prog_bar=True)
-        self.log('l1_light', l1_light, prog_bar=True)
-        # self.log('l_msssim', l_msssim, prog_bar=True)
-        # self.log('light_msssim', l_light_msssim, prog_bar=True)
+        self.log('wl1', wl1, prog_bar=True)
         self.log('learning_rate', lr_saved, prog_bar=True)
         self.log('train_loss', loss)
         return loss
 
     def validation_step(self, batch, batch_nb):
         print("Validation")
-        input_, output_face, light_input, light_output, [], [] = batch
+        input_, output_face, light_input, light_output, ip,op = batch
 
         face_estim, light_estim = self.forward(input_, light_output)
 
         face_estim = torch.clamp(face_estim, min=0, max=1)
         light_estim = torch.clamp(light_estim, min=0, max=1)
-
+        weights = Variable(torch.from_numpy(self.sa), requires_grad=False).float().to(self.lightingNet.device)
         # Calculate loss
         sz = output_face.size(2) ** 2
-        l1_face = 6 / sz * torch.sum(torch.abs(face_estim - output_face)) / face_estim.shape[0]
-        l1_light = 4 / (16 * 32) * torch.sum(torch.abs(light_estim - light_input)) / face_estim.shape[0]
-        # l_msssim = (1 - m(output_face, face_estim)) * 1000
+        l1_face = 1 / sz * torch.sum(torch.abs(face_estim - output_face)) / face_estim.shape[0]
+        wl1 = torch.sum(weights * torch.abs(torch.log(1 + light_estim) - torch.log(1 + light_input))) ** 2 / \
+              face_estim.shape[0]
 
-        loss = l1_face + l1_light
+        loss = l1_face + 0.8*wl1
 
         psnr_ = psnr(image_pred=face_estim, image_gt=output_face) / face_estim.shape[0]
 
@@ -249,11 +246,11 @@ class HourglassNet(pl.LightningModule):
                             help='Log computational graph on tensorboard')
         parser.add_argument('--log_histogram', default=0, type=int,
                             help='Log histogram for weights and bias')
-        parser.add_argument('--batch_size', default=2, type=int)
-        parser.add_argument('--learning_rate', default=1e-2, type=float)
+        parser.add_argument('--batch_size', default=8, type=int)
+        parser.add_argument('--learning_rate', default=1e-3, type=float)
         parser.add_argument('--momentum', default=0.9, type=float,
                             help='SGD momentum (default: 0.9)')
-        parser.add_argument('--weight_decay', '--wd', default=1e-6, type=float,
+        parser.add_argument('--weight_decay', '--wd', default=1e-2, type=float,
                             help='weight decay (default: 1e-4)')
         parser.add_argument('--bilinear', default=0, type=int,
                             help='upsampling')

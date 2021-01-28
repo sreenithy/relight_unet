@@ -32,11 +32,12 @@ class lightingNet(pl.LightningModule):
         self.block1 = nn.Sequential(nn.Conv2d(self.ncInput,1536, kernel_size=(1,1)),   nn.InstanceNorm2d(1535),nn.PReLU())
         self.block2 = nn.Sequential(nn.Conv2d(self.ncInput, 512, kernel_size=(1,1)),   nn.InstanceNorm2d(512), nn.PReLU())
         self.net2 = nn.Sequential(
-            nn.PReLU(),
+
             nn.Conv2d(1536, 512, kernel_size=1),
             # nn.GroupNorm(num_groups=256, num_channels=512),
             nn.InstanceNorm2d(512),
             nn.PReLU())
+        self.softplus = nn.Softplus()
 
 
     def forward(self, innerFeat, targetLight):
@@ -58,7 +59,8 @@ class lightingNet(pl.LightningModule):
         confidence = ip2.reshape([batch_size, 16,32,1, 16, 16])
         confidence = confidence.repeat_interleave(repeats=3, dim=3)
         confidence = confidence.reshape([-1, 16 * 16])
-        confidence = F.softmax(confidence, dim = 1)
+        confidence = self.softplus(confidence)
+        # confidence = F.softmax(confidence, dim = 1)
         confidence = confidence.reshape([batch_size,16,32,3,256])
         rgb = rgb.reshape([batch_size,16,32,3, 16 * 16])
         lightmap = torch.sum(rgb*confidence, dim = -1)/torch.sum(confidence)

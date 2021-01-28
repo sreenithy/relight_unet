@@ -4,7 +4,7 @@ import pytorch_lightning as pl
 from pytorch_lightning.loggers import TensorBoardLogger, CSVLogger
 import argparse
 parser = argparse.ArgumentParser()
-from model import HourglassNet
+from model import RelightNetwork
 from argparse import ArgumentParser
 from torchsummary import summary
 import torch
@@ -13,7 +13,7 @@ def main(hparams):
     # ------------------------
     # 1 INIT LIGHTNING MODEL
     # ------------------------
-    net = HourglassNet(hparams=hparams)
+    net = RelightNetwork(hparams=hparams)
     logger = TensorBoardLogger("tb_logs", name="relightnet")
     # ------------------------
     # 2 INIT TRAINER
@@ -78,6 +78,6 @@ if __name__ == '__main__':
         help='if true uses 16 bit precision'
     )
     log_dir = 'tmp'
-    parser = HourglassNet.add_model_specific_args(parent_parser)
+    parser = RelightNetwork.add_model_specific_args(parent_parser)
     hyperparams = parser.parse_args()
     main(hyperparams)
