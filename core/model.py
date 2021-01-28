@@ -73,7 +73,12 @@ class RelightNetwork(pl.LightningModule):
         self.layer7 = Up(256, 128)
         self.layer8 = Up(128, 64)
 
-        self.layer9 = nn.Conv2d(in_channels=64, out_channels=3, kernel_size=3, padding=1, stride=1)
+        # self.layer9 = nn.Conv2d(in_channels=64, out_channels=3, kernel_size=3, padding=1, stride=1)
+        self.layer9 = nn.Sequential(
+            nn.Conv2d(in_channels=64, out_channels=32, kernel_size=3, padding=1, stride=1),
+            nn.InstanceNorm2d(32),
+            nn.PReLU())
+        self.layer10 = nn.Conv2d(in_channels=32, out_channels=3, kernel_size=3, padding=1, stride=1)
         self.sa = EnvironmentMap(16, 'LatLong').solidAngles()
         self.save_hyperparameters()
 
@@ -91,7 +96,8 @@ class RelightNetwork(pl.LightningModule):
         x6 = self.layer7(x6, x20, x21)
         x6 = self.layer8(x6, x10, x11)
         x6 = torch.cat([x0, x6], dim=1)
-        face_estim = self.layer9(x6)
+        x6 = self.layer9(x6)
+        face_estim = self.layer10(x6)
         face_estim = torch.sigmoid(face_estim)
         return face_estim, light_estim
 
@@ -132,7 +138,7 @@ class RelightNetwork(pl.LightningModule):
                                )), min=0, max=1)
                 albedo_grid = make_grid_with_lightlabels(img_stack.detach().cpu(),
                                                          ["Input", "Output", "Diff (3x)", "Output estim",
-                                                         ip, op, "Diff (3x)", " Input Estim"],
+                                                         "Input Light", "Output Light", "Diff (3x)", " Input Estim"],
                                                          nrow=4)
                 save_image(albedo_grid,
                            'results_face/epoch_{}_step_{}_face_images.png'.format(self.current_epoch,
