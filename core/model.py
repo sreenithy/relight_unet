@@ -102,17 +102,17 @@ class RelightNetwork(pl.LightningModule):
         return face_estim, light_estim
 
     def training_step(self, batch, batch_nb):
-        # self.trainer.optimizers[0].param_groups[-1]['lr'] = 2e-5
+        # self.trainer.optimizers[0].param_groups[-1]['lr'] = 1e-3
         input_, output_face, light_input, light_output, ip,op = batch
         face_estim, light_estim = self.forward(input_, light_output)
         weights = Variable(torch.from_numpy(self.sa), requires_grad=False).float().to(self.lightingNet.device)
         sz = output_face.size(2) ** 2
-        l1_face =1/sz*torch.sum(torch.abs(face_estim - output_face)) / face_estim.shape[0]
-        wl1 = torch.sum(weights * torch.abs(torch.log(1+light_estim) - torch.log(1+light_input)))**2 / face_estim.shape[0]
+        l1_face =10/sz*torch.sum(torch.abs(face_estim - output_face)) / face_estim.shape[0]
+        wl1 = 0.08*torch.sum(weights * torch.abs(torch.log(1+light_estim) - torch.log(1+light_input)))**2 / face_estim.shape[0]
 
         # l_msssim = (1 - m(output_face, face_estim)) * 1000
 
-        loss = l1_face + 0.8* wl1
+        loss = l1_face + wl1
         lr_saved = self.trainer.optimizers[0].param_groups[-1]['lr']
         lr_saved = torch.scalar_tensor(lr_saved).to(self.lightingNet.device)
 
@@ -137,8 +137,8 @@ class RelightNetwork(pl.LightningModule):
                                light_ip256[0:1, ...], light_output[0:1, ...], light_diff256, light_estim256[0:1, ...]
                                )), min=0, max=1)
                 albedo_grid = make_grid_with_lightlabels(img_stack.detach().cpu(),
-                                                         ["Input", "Output", "Diff (3x)", "Output estim",
-                                                         "Input Light", "Output Light", "Diff (3x)", " Input Estim"],
+                                                         ["Input", "Target", "Diff (3x)", "Target estim",
+                                                         "Input Light ", "Target Light", "Diff (3x)", " Input Estim"],
                                                          nrow=4)
                 save_image(albedo_grid,
                            'results_face/epoch_{}_step_{}_face_images.png'.format(self.current_epoch,
@@ -183,11 +183,11 @@ class RelightNetwork(pl.LightningModule):
         weights = Variable(torch.from_numpy(self.sa), requires_grad=False).float().to(self.lightingNet.device)
         # Calculate loss
         sz = output_face.size(2) ** 2
-        l1_face = 1 / sz * torch.sum(torch.abs(face_estim - output_face)) / face_estim.shape[0]
-        wl1 = torch.sum(weights * torch.abs(torch.log(1 + light_estim) - torch.log(1 + light_input))) ** 2 / \
+        l1_face = 10 / sz * torch.sum(torch.abs(face_estim - output_face)) / face_estim.shape[0]
+        wl1 = 0.08*torch.sum(weights * torch.abs(torch.log(1 + light_estim) - torch.log(1 + light_input))) ** 2 / \
               face_estim.shape[0]
 
-        loss = l1_face + 0.8*wl1
+        loss = l1_face + wl1
 
         psnr_ = psnr(image_pred=face_estim, image_gt=output_face) / face_estim.shape[0]
 
@@ -227,8 +227,8 @@ class RelightNetwork(pl.LightningModule):
         return [optimizer], [scheduler]
 
     def __dataloader(self):
-        dataset_train = LightStageFrames(Path("train_s/"))
-        dataset_val = LightStageFrames(Path("val_s/"))
+        dataset_train = LightStageFrames(Path("train/"))
+        dataset_val = LightStageFrames(Path("val/"))
         train_loader = FastDataLoader(dataset_train, batch_size=self.batch_size, num_workers=self.num_workers,
                                       pin_memory=True, shuffle=True)
         val_loader = DataLoader(dataset_val, batch_size=self.batch_size, pin_memory=True, shuffle=False)
@@ -252,8 +252,8 @@ class RelightNetwork(pl.LightningModule):
                             help='Log computational graph on tensorboard')
         parser.add_argument('--log_histogram', default=0, type=int,
                             help='Log histogram for weights and bias')
-        parser.add_argument('--batch_size', default=8, type=int)
-        parser.add_argument('--learning_rate', default=1e-3, type=float)
+        parser.add_argument('--batch_size', default=32, type=int)
+        parser.add_argument('--learning_rate', default=5e-4, type=float)
         parser.add_argument('--momentum', default=0.9, type=float,
                             help='SGD momentum (default: 0.9)')
         parser.add_argument('--weight_decay', '--wd', default=1e-2, type=float,

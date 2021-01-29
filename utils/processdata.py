@@ -47,3 +47,26 @@ def preprocess(path):
     a = Image.open(path)
     a = a.resize((RES, RES))
     return a
+
+def modifytestface(ip):
+    ip = np.array(ip)
+    ip = ip[:,:,:3]
+    ip = ip.astype(np.float32)/255
+    ip = ip.transpose((2, 0, 1))
+    ip = np.power(ip, 2.2)
+    ip = ip[None, ...]
+    ip = torch.from_numpy(ip).float()
+    return ip
+
+
+def modifytestlight(path):
+    ip = Image.open(path)
+    ip = np.array(ip)
+    ip = ip[:,:,:3]
+    ip = ip.astype(np.float32)/255
+    ip = ip.transpose((2, 0, 1))
+    ip = ip[None, ...]
+    ip = torch.from_numpy(ip).float()
+    return ip
+
+

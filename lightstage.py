@@ -52,8 +52,8 @@ class LightStageFrames(Dataset):
         # ip_light = Image.open('gtlg/'+ l + '_' + str(v) +'.png')
         # op_light = Image.open('gtlg/'+ op_l + '_' + str(v) + '.png')
 
-        ip_light = Image.open('s080laval/' + img_id+'_' + str(v) +'_'+l +  '.png')
-        op_light = Image.open('s080laval/'+ img_id+'_' + str(v) +'_'+ op_l  + '.png')
+        ip_light = Image.open('lavalmapsall/' + img_id+'_' + str(v) +'_'+l +  '.png')
+        op_light = Image.open('lavalmapsall/'+ img_id+'_' + str(v) +'_'+ op_l  + '.png')
 
 
         ip, ip_light, op, op_light = colour_jitter(ip, ip_light, op, op_light)
@@ -67,10 +67,10 @@ class LightStageFrames(Dataset):
         return ip, op, ip_light, op_light, l + '_' + str(v), op_l + '_' + str(v)
 
     def __getitem__(self, index):
-        if self.path == 'train_s':
+        if self.path == 'train':
             divby = 28
         else:
-            divby = 6
+            divby = 8
         img_path = self.dataKeys[index]
         op_cnd = 1
         factor = int(index / divby)

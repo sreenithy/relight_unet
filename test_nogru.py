@@ -7,17 +7,19 @@ import glob
 from lightstage import LightStageFrames
 import sys
 sys.path.append('core')
-from model import HourglassNet
+from model import RelightNetwork
 from skimage.io import imread, imsave
 from skimage import exposure
 from pathlib import Path
 numbers = re.compile(r'(\d+)')
 device = torch.device("cpu")
+from utils.processdata import *
 
-if not os.path.exists('1'):
-    os.makedirs('1')
-if not os.path.exists('2'):
-    os.makedirs('2')
+if not os.path.exists('testface'):
+    os.makedirs('testface')
+if not os.path.exists('testlight'):
+    os.makedirs('testlight')
+
 def obtainimg(dataset_test,index):
     RES = 256
     img_paths = dataset_test.dataKeys[index]
@@ -34,7 +36,7 @@ def obtainimg(dataset_test,index):
 def process( img_path, RES):
     ip = Image.open(img_path)
     ip = ip.resize((RES, RES))
-    ip = modify(ip)
+    ip = modifytestface(ip)
     return ip
 
 def normlight(image,  filename):
@@ -49,34 +51,23 @@ def normaliseimg(image, filename):
     imsave(filename, np.clip(255. * a, 0, 255).astype('uint8'))
 
 
-def numericalSort(value):
-    parts = numbers.split(value)
-    parts[1::2] = map(int, parts[1::2])
-    return parts
 
-def modify(ip):
-    ip = np.array(ip)
-    ip = ip[:,:,:3]
-    ip = ip.astype(np.float32)/255
-    ip = ip.transpose((2, 0, 1))
-    ip = ip[None, ...]
-    ip = torch.from_numpy(ip).float()
-    return ip
-
-dataset_test = LightStageFrames(Path("s2/"))
+dataset_test = LightStageFrames(Path("biden/"))
 length = len(dataset_test.dataList)
 print(length)
 RES=256
-chk_pt = 'tb_logs/relightnet/version_101/checkpoints/epoch=413.ckpt'#tb_logs/relightnet/version_30/checkpoints/epoch=361.ckpt'
-net = HourglassNet.load_from_checkpoint(chk_pt).to(device)
+chk_pt = 'tb_logs/relightnet/version_32/checkpoints/epoch=52.ckpt'#tb_logs/relightnet/version_30/checkpoints/epoch=361.ckpt'
+net = RelightNetwork.load_from_checkpoint(chk_pt).to(device)
 net.eval()
-
+target_light = modifytestlight('lavalmapsall/s030-041006-00_7_AG8A4509.png')
 for idx in range(len(dataset_test)):
     inputs, img_paths = obtainimg(dataset_test, idx)
     for i, (input_,img_path) in enumerate(zip(inputs,img_paths)):
         print(img_path)
         IP = input_.to(device)
-        albedo_estim, light_estim = net(IP)
+        target_light = target_light.to(device)
+        face_estim, light_estim = net(IP,target_light)
         name = (os.path.splitext(os.path.basename(img_path))[0].split(".")[0])
-        normaliseimg(light_estim,  '1/' + name +'.png')
-        normaliseimg(albedo_estim,  's2/' + name + '_relit.png')
+
+        imsave('testface/' + name +'.png',np.asarray(np.transpose(light_estim[0].cpu().data.numpy(), (1, 2, 0))* 255).astype('uint8'))
+        imsave( 'testlight/' + name + '_relit.png',np.asarray(np.transpose(face_estim[0].cpu().data.numpy(), (1, 2, 0)) * 255).astype('uint8'))
