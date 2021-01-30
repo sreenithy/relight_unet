@@ -48,7 +48,6 @@ class LightStageFrames(Dataset):
         # op_light = self.lightprocess(e_op, name)
 
         op_l = str(os.path.splitext(os.path.basename(op_path))[0].split("_")[-1])
-        # #
         # ip_light = Image.open('gtlg/'+ l + '_' + str(v) +'.png')
         # op_light = Image.open('gtlg/'+ op_l + '_' + str(v) + '.png')
 
@@ -57,7 +56,7 @@ class LightStageFrames(Dataset):
 
 
         ip, ip_light, op, op_light = colour_jitter(ip, ip_light, op, op_light)
-        ip = np.array(ip)
+        # ip = np.array(ip)
         ip = modifyface(ip)
         ip_light = modifylight(ip_light)
         op = modifyface(op)
@@ -67,10 +66,10 @@ class LightStageFrames(Dataset):
         return ip, op, ip_light, op_light, l + '_' + str(v), op_l + '_' + str(v)
 
     def __getitem__(self, index):
-        if self.path == 'train':
+        if self.path == 'train_s':
             divby = 28
         else:
-            divby = 8
+            divby = 6
         img_path = self.dataKeys[index]
         op_cnd = 1
         factor = int(index / divby)

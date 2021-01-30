@@ -10,7 +10,7 @@ device = torch.device("cpu")
 def preprocess(path):
     ip= Image.open(path)
     ip = np.array(ip)
-    ip = ip.astype(np.float32) / 255.0
+    ip = ip.astype(np.float32) #/ 255.0
     ip  = np.power(ip,2.2)
     plt.imshow(ip);plt.show()
     ip =np.power(ip,0.4545)
