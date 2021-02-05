@@ -28,7 +28,7 @@ def main(hparams):
     # ------------------------
     # 3 FIND LR
     # ------------------------
-    # Run learning rate finder
+    # # Run learning rate finder
     # lr_finder = trainer.tuner.lr_find(net)
     #
     # # Results can be found in

@@ -33,6 +33,7 @@ class LightStageFrames(Dataset):
 
     def _processlaval(self, img_path, op_path):
         img_id = str(os.path.splitext(os.path.basename(img_path))[0].split("_")[0])
+
         l = str(os.path.splitext(os.path.basename(img_path))[0].split("_")[-1])
         v = int(os.path.splitext(os.path.basename(img_path))[0].split("_")[1])
 
@@ -48,11 +49,14 @@ class LightStageFrames(Dataset):
         # op_light = self.lightprocess(e_op, name)
 
         op_l = str(os.path.splitext(os.path.basename(op_path))[0].split("_")[-1])
+        # if op_l != 'O9C4A044':
+        #     l,op_l = op_l,l
+        #     ip,op = op,ip
         # ip_light = Image.open('gtlg/'+ l + '_' + str(v) +'.png')
         # op_light = Image.open('gtlg/'+ op_l + '_' + str(v) + '.png')
 
-        ip_light = Image.open('lavalmapsall/' + img_id+'_' + str(v) +'_'+l +  '.png')
-        op_light = Image.open('lavalmapsall/'+ img_id+'_' + str(v) +'_'+ op_l  + '.png')
+        ip_light = Image.open('alllaval_png/' + img_id+'_' + str(v) +'_'+l +  '.png')
+        op_light = Image.open('alllaval_png/'+ img_id+'_' + str(v) +'_'+ op_l  + '.png')
 
 
         ip, ip_light, op, op_light = colour_jitter(ip, ip_light, op, op_light)
@@ -66,15 +70,13 @@ class LightStageFrames(Dataset):
         return ip, op, ip_light, op_light, l + '_' + str(v), op_l + '_' + str(v)
 
     def __getitem__(self, index):
-        if self.path == 'train_s':
+        if self.path == 'ts':
             divby = 28
         else:
-            divby = 6
+            divby = 8#6
         img_path = self.dataKeys[index]
         op_cnd = 1
         factor = int(index / divby)
-        # print(index, img_path, factor,self.dataKeys[divby * factor], self.dataKeys[divby * (factor + 1) - 1],divby*factor+1, divby*(factor+1)-2)
-        # divby * factor + 1, divby * (factor + 1) - 2
         target_index = random.randint(divby * factor, divby * (factor + 1) - 1)
         while op_cnd:
             if target_index != index:
@@ -86,7 +88,6 @@ class LightStageFrames(Dataset):
         op_path = self.dataKeys[target_index]
 
         img_ip, img_op, ip_light, op_light, ip,op = self._processlaval(img_path, op_path)
-        # img = self.transform(img)
         return img_ip, img_op, ip_light, op_light, ip,op
 
     def lightprocess(self, e, name):

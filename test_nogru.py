@@ -56,10 +56,10 @@ dataset_test = LightStageFrames(Path("biden/"))
 length = len(dataset_test.dataList)
 print(length)
 RES=256
-chk_pt = 'tb_logs/relightnet/version_32/checkpoints/epoch=52.ckpt'#tb_logs/relightnet/version_30/checkpoints/epoch=361.ckpt'
+chk_pt = 'tb_logs/relightnet/version_64/checkpoints/epoch=729.ckpt'#tb_logs/relightnet/version_30/checkpoints/epoch=361.ckpt'
 net = RelightNetwork.load_from_checkpoint(chk_pt).to(device)
 net.eval()
-target_light = modifytestlight('lavalmapsall/s030-041006-00_7_AG8A4509.png')
+target_light = modifytestlight('lavalmapsall/s878-060714-02_6_O9C4A044.png')
 for idx in range(len(dataset_test)):
     inputs, img_paths = obtainimg(dataset_test, idx)
     for i, (input_,img_path) in enumerate(zip(inputs,img_paths)):

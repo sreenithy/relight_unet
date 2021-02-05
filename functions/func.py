@@ -76,7 +76,7 @@ def make_grid_with_lightlabels(tensor, labels, nrow=10, limit=20, padding=2,
 
     import cv2
     font = 1
-    fontScale = 2
+    fontScale = 1
     color = (255, 255, 255)
     thickness = 1
 
