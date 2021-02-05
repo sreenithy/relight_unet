@@ -245,7 +245,7 @@ class RelightNetwork(pl.LightningModule):
         parser.add_argument('--log_histogram', default=0, type=int,
                             help='Log histogram for weights and bias')
         parser.add_argument('--batch_size', default=8, type=int)
-        parser.add_argument('--learning_rate', default=5e-5 , type=float)
+        parser.add_argument('--learning_rate', default=1e-2 , type=float)
         parser.add_argument('--momentum', default=0.9, type=float,
                             help='SGD momentum (default: 0.9)')
         parser.add_argument('--weight_decay', '--wd', default=1e-2, type=float,
