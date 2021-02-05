@@ -4,11 +4,6 @@ import torch
 import torch.nn as nn
 
 
-def conv3X3(in_planes, out_planes, stride=1):
-    return nn.Conv2d(in_planes, out_planes, kernel_size=3, stride=stride,
-                     padding=1, bias=False)
-
-
 def tile(a, dim, n_tile):
     init_dim = a.size(dim)
     repeat_idx = [1] * a.dim()
@@ -43,15 +38,15 @@ class lightingNet(pl.LightningModule):
         # self.block1 = nn.Sequential(nn.Conv2d(self.ncInput,1536, kernel_size=(1,1)),   nn.InstanceNorm2d(1535),nn.PReLU())
         # self.block2 = nn.Sequential(nn.Conv2d(self.ncInput, 512, kernel_size=(1,1)),   nn.InstanceNorm2d(512), nn.PReLU())
         self.net3 = nn.Sequential(
-            nn.Conv2d(1536, 256, kernel_size=1),
+            nn.Conv2d(1536, 512, kernel_size=1),
+            # nn.GroupNorm(num_groups=256, num_channels=512),
+            nn.InstanceNorm2d(512),
+            nn.PReLU())
+        self.net4 = nn.Sequential(
+            nn.Conv2d(512, 256, kernel_size=1),
             # nn.GroupNorm(num_groups=256, num_channels=512),
             nn.InstanceNorm2d(256),
             nn.PReLU())
-        # self.net4 = nn.Sequential(
-        #     nn.Conv2d(512, 256, kernel_size=1),
-        #     # nn.GroupNorm(num_groups=256, num_channels=512),
-        #     nn.InstanceNorm2d(256),
-        #     nn.PReLU())
         self.softplus = nn.Softplus()
 
     def forward(self, innerFeat, targetLight):
@@ -83,5 +78,5 @@ class lightingNet(pl.LightningModule):
         t2 = t1.repeat_interleave(repeats=16, dim=2)
         t2 = t2.repeat_interleave(repeats=16, dim=3)
         t3 = self.net3(t2)
-        # t3 = self.net4(t3)
+        t3 = self.net4(t3)
         return t3, lightmap

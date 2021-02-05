@@ -9,9 +9,8 @@ from torch.optim.lr_scheduler import MultiStepLR
 from torchvision.utils import save_image
 from utils.metrics import *
 import os
-import pytorch_msssim
-
-m = pytorch_msssim.MSSSIM()
+#import pytorch_msssim
+#m = pytorch_msssim.MSSSIM()
 from functions.func import *
 
 if not os.path.exists('results_face'):
@@ -21,7 +20,7 @@ import pytorch_lightning as pl
 from lightstage import *
 from update import *
 from lighting import lightingNet
-from up import *
+from up_new import *
 
 from envmap import EnvironmentMap
 # From https://github.com/pytorch/pytorch/issues/15849
@@ -79,6 +78,7 @@ class RelightNetwork(pl.LightningModule):
             nn.InstanceNorm2d(32),
             nn.PReLU())
         self.layer10 = nn.Conv2d(in_channels=32, out_channels=3, kernel_size=3, padding=1, stride=1)
+        self.upsample1 = nn.ConvTranspose2d(64, 32, kernel_size=2, stride=2)
         self.sa = EnvironmentMap(16, 'LatLong').solidAngles()
         self.save_hyperparameters()
 
@@ -95,6 +95,7 @@ class RelightNetwork(pl.LightningModule):
         x6 = self.layer6(x6, x30, x31)
         x6 = self.layer7(x6, x20, x21)
         x6 = self.layer8(x6, x10, x11)
+        x6 = self.upsample1(x6)
         x6 = torch.cat([x0, x6], dim=1)
         x6 = self.layer9(x6)
         face_estim = self.layer10(x6)
@@ -218,8 +219,8 @@ class RelightNetwork(pl.LightningModule):
         return [optimizer], [scheduler]
 
     def __dataloader(self):
-        dataset_train = LightStageFrames(Path("train_s/"))
-        dataset_val = LightStageFrames(Path("val_s/"))
+        dataset_train = LightStageFrames(Path("train_X/"))
+        dataset_val = LightStageFrames(Path("val_X/"))
         train_loader = FastDataLoader(dataset_train, batch_size=self.batch_size, num_workers=self.num_workers,
                                       pin_memory=True, shuffle=True)
         val_loader = DataLoader(dataset_val, batch_size=self.batch_size, pin_memory=True, shuffle=False)
