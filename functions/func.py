@@ -7,9 +7,9 @@ import torch
 import pandas as pd
 import numpy as np
 from itertools import zip_longest
-
-im_mul = [1.9425111494312444, 2.173566784839146, 3.159374388266134]
-albedo_mul = [2.2330479393857896, 2.3364531836931643, 2.7321869878173968]
+#
+# im_mul = [1.9425111494312444, 2.173566784839146, 3.159374388266134]
+# albedo_mul = [2.2330479393857896, 2.3364531836931643, 2.7321869878173968]
 
 def makegrid(output, numrows):
     outer = (torch.Tensor.cpu(output).detach())
