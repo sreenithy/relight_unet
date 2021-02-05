@@ -11,7 +11,7 @@ from utils.metrics import *
 import os
 import pytorch_msssim
 
-m = pytorch_msssim.MSSSIM()
+# m = pytorch_msssim.MSSSIM()
 from functions.func import *
 
 if not os.path.exists('results_face'):
